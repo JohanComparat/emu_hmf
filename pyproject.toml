@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "emu_hmf"
+version = "0.1.0.dev0"
+description = "A differentiable recalibration of Tinker08 against the CSST halo-mass-function emulator"
+requires-python = ">=3.10"
+# Core: what an *inference* needs.  Everything that generates the training set
+# or fits it is an extra, for the reason `emu_pk` states -- a package meant to
+# be imported by a forecast cannot make the forecast install a
+# Gaussian-process emulator, a Boltzmann solver, or an optimiser.
+dependencies = ["numpy>=1.24", "jax>=0.4.20"]
+
+[project.optional-dependencies]
+gen = ["CEmulator", "ggah_mod", "emu_pk"]
+train = ["optax>=0.1.7"]
+dev = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+include = ["emu_hmf*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
