@@ -68,6 +68,12 @@ def load_shards(shard_dir, nu_range=None):
     ln_f = np.concatenate(lnf).astype(np.float64)
     print(f"{len(files)} shards, {n_cosmo} cosmologies ({n_failed} refused) "
           f"-> {len(ln_f)} rows in nu = [{lo}, {hi}]", flush=True)
+    # Carried out, not merely printed: what the weights were fitted on is part
+    # of what the weights mean, and a line on a terminal does not survive to
+    # whatever quotes the accuracy six months later.
+    load_shards.provenance = {"n_shards": len(files), "n_cosmologies": n_cosmo,
+                              "n_refused": n_failed, "n_rows": int(len(theta)),
+                              "nu_lo": float(lo), "nu_hi": float(hi)}
     return theta, z, sigma, ln_f
 
 
@@ -142,17 +148,24 @@ def fit(shard_dir, out, hidden=(64, 64), epochs=400, batch=4096, lr=3e-3,
 
     out = pathlib.Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
+    prov = getattr(load_shards, "provenance", {})
     np.savez(out, **{k: np.asarray(v) for k, v in best_p.items()},
              n_layers=np.int64(len(sizes) - 1),
              val_rms=np.float64(np.sqrt(best)),
              baseline_rms=np.float64(base),
              nu_range=np.array(target.NU_TRUSTED if nu_range is None else nu_range),
-             params_order=np.array(list(box.PARAMS) + ["z"], dtype="U16"))
+             params_order=np.array(list(box.PARAMS) + ["z"], dtype="U16"),
+             epochs=np.int64(epochs), hidden=np.asarray(hidden, dtype=np.int64),
+             val_frac=np.float64(val_frac),
+             **{k: np.int64(v) if isinstance(v, int) else np.float64(v)
+                for k, v in prov.items()})
     print(f"\nwrote {out}", flush=True)
     print(f"  Tinker08 unchanged : rms {base:.5f} in ln f  ({np.expm1(base):.2%})")
     print(f"  recalibrated       : rms {np.sqrt(best):.5f} in ln f  "
           f"({np.expm1(np.sqrt(best)):.2%})")
     print(f"  improvement        : {base / np.sqrt(best):.2f}x")
+    print(f"  fitted on          : {prov.get('n_cosmologies', '?')} cosmologies, "
+          f"{prov.get('n_rows', '?')} rows, {prov.get('n_refused', '?')} refused")
     return out
 
 
