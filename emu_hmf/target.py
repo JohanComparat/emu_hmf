@@ -114,19 +114,37 @@ NU_TRUSTED = (0.5, 3.0)
 
 
 def to_ggah_cosmology(theta):
-    """CSST's eight -> a ``ggah_mod`` ``Cosmology``.
+    r"""CSST's eight -> a ``ggah_mod`` ``Cosmology``.
 
-    The conversions are all conventional and all easy to get wrong once:
-    ``H0`` is in km/s/Mpc where ``ggah_mod`` wants ``h``; ``A`` is
-    :math:`10^{9}A_s` where ``ggah_mod`` wants :math:`\\ln(10^{10}A_s)`; and
-    CSST's ``Omegam`` includes the massive neutrinos, as ``ggah_mod``'s does.
+    Two of the conversions are conventional and stated in the box's own
+    documentation: ``H0`` is in km/s/Mpc where ``ggah_mod`` wants ``h``, and
+    ``A`` is :math:`10^{9}A_s` where ``ggah_mod`` wants :math:`\ln(10^{10}A_s)`.
+    The third is not stated anywhere and is the one that costs something.
+
+    CSST's ``Omegam`` --- the symbol ``param_limits`` bounds --- is the **cold**
+    density, :math:`\Omega_b + \Omega_{cdm}`, with the massive neutrinos
+    excluded; ``CEmulator`` carries the total separately as ``Cosmo.OmegaM``.
+    ``ggah_mod``'s :attr:`Omega_m` is the total.  So the two agree on
+    :attr:`Omega_cb`, not on :attr:`Omega_m`, and the neutrino density has to be
+    added on the way in.
+
+    It is added by *asking ``ggah_mod``* rather than by dividing
+    :math:`\Sigma m_\nu` by 93.14 eV here: :attr:`Omega_nu` is a
+    :math:`\Sigma m_\nu`-and-:math:`h` quantity that does not depend on
+    :attr:`Omega_m`, so one throwaway construction reads it off in whatever
+    convention the package actually uses, and the second construction is exact
+    by that package's own definition instead of by a constant repeated in two
+    repositories.  Getting it wrong is worth half a per cent in :math:`\Omega_m`
+    at 0.06 eV and two per cent at 0.3 --- small enough to survive every smoke
+    test, and directly in the variance the correction is being fitted against.
     """
     from ggah_mod.cosmology import Cosmology
     d = dict(zip(box.PARAMS, np.asarray(theta, dtype=float)))
-    return Cosmology.create(
-        Omega_m=d["Omegam"], Omega_b=d["Omegab"], h=d["H0"] / 100.0,
-        n_s=d["ns"], ln10A_s=float(np.log(10.0 * d["A"])),
-        sum_mnu=d["mnu"], w0=d["w"], wa=d["wa"])
+    kw = dict(Omega_b=d["Omegab"], h=d["H0"] / 100.0, n_s=d["ns"],
+              ln10A_s=float(np.log(10.0 * d["A"])),
+              sum_mnu=d["mnu"], w0=d["w"], wa=d["wa"])
+    probe = Cosmology.create(Omega_m=d["Omegam"], **kw)
+    return Cosmology.create(Omega_m=d["Omegam"] + float(probe.Omega_nu), **kw)
 
 
 def set_cosmology(emu, theta):
@@ -135,16 +153,20 @@ def set_cosmology(emu, theta):
     Not the one ``param_limits`` speaks, which is the trap: the bounds are
     stated in :math:`\Omega_m` and :math:`10^{9}A_s`, and the setter wants the
     *cold* density and :math:`A_s` itself, which it then multiplies by
-    :math:`10^{9}` to check against those same bounds.  And the cold density is
-    :math:`\Omega_{cdm}`, with the neutrinos excluded --- not
-    :math:`\Omega_m - \Omega_b`, which still carries them.  Both conversions are
-    one line, both are silently wrong if guessed, and ``ggah_mod``'s
-    ``Cosmology`` already derives the second, so it derives it here too rather
-    than being re-derived.
+    :math:`10^{9}` to check against those same bounds.  And the cold density it
+    wants is :math:`\Omega_{cdm}` with the neutrinos excluded --- not
+    :math:`\Omega_m - \Omega_b`, which still carries them; ``set_cosmos`` adds
+    :math:`\Omega_\nu` back to reach the total, so handing it the wrong one
+    double-counts.  ``ggah_mod``'s ``Cosmology`` already derives exactly this
+    quantity as :attr:`Omega_cdm`, so it is named here rather than re-derived,
+    and the two packages then agree symbol for symbol: CSST's bounded
+    ``Omegam`` is ``ggah_mod``'s :attr:`Omega_cb`, and ``set_cosmos``'s
+    ``Omegac`` is its :attr:`Omega_cdm`.
     """
     d = dict(zip(box.PARAMS, np.asarray(theta, dtype=float)))
     c = to_ggah_cosmology(theta)
-    emu.set_cosmos(Omegab=float(c.Omega_b), Omegac=float(c.Omega_cdm),
+    emu.set_cosmos(Omegab=float(c.Omega_b),
+                   Omegac=float(c.Omega_cdm),
                    H0=float(c.h) * 100.0, As=d["A"] * 1e-9, ns=float(c.n_s),
                    w=float(c.w0), wa=float(c.wa), mnu=float(c.sum_mnu))
     return emu

@@ -29,15 +29,43 @@ class TestTheDialectConversions:
             emu.set_cosmos(Omegab=0.049, Omegac=0.261, H0=67.36,
                            As=2.1, ns=0.9649, w=-1.0, wa=0.0, mnu=0.06)
 
-    def test_the_cold_density_excludes_the_neutrinos(self):
-        """`Omegac` is not `Omegam - Omegab`: that still carries them."""
-        th = np.array([0.049, 0.31, 67.36, 0.9649, 2.1, -1.0, 0.0, 0.30])
+    @pytest.mark.parametrize("mnu", [0.0, 0.06, 0.30])
+    def test_the_density_round_trip_is_exact(self, emu, mnu):
+        """The quiet trap, pinned in both directions.
+
+        CSST's `Omegam` -- what `param_limits` bounds -- is the *cold* density;
+        `set_cosmos`'s `Omegac` argument is not, because the setter subtracts
+        Omega_nu from it internally.  So the value handed over is the *total*
+        matter minus baryons, and what comes back must be the sampled `Omegam`
+        exactly.  Any other reading loses Omega_nu somewhere: half a per cent
+        at 0.06 eV, two at 0.3, in the variance the whole recalibration is made
+        against.
+        """
+        th = np.array([0.049, 0.31, 67.36, 0.9649, 2.1, -1.0, 0.0, mnu])
+        target.set_cosmology(emu, th)
+        assert float(emu.Cosmo.Omegam) == pytest.approx(0.31, abs=1e-12)
+        # And the identity that makes the two packages the same cosmology:
+        # CSST's bounded `Omegam` is ggah_mod's *cold* density, so ggah_mod's
+        # total sits above it by exactly Omega_nu.
         c = target.to_ggah_cosmology(th)
-        naive = float(c.Omega_m) - float(c.Omega_b)
-        assert float(c.Omega_cdm) < naive
-        # At 0.3 eV the neutrinos are a few parts in a thousand of Omega_m, so
-        # getting this wrong is a small number that survives every smoke test.
-        assert 1e-3 < (naive - float(c.Omega_cdm)) / naive < 3e-2
+        assert float(c.Omega_cb) == pytest.approx(0.31, rel=1e-12)
+        assert float(c.Omega_m) - float(c.Omega_cb) == pytest.approx(
+            float(c.Omega_nu), rel=1e-12)
+        assert float(c.Omega_cdm) == pytest.approx(0.31 - 0.049, rel=1e-12)
+        if mnu > 0:
+            assert float(c.Omega_m) > 0.31
+
+    def test_a_box_edge_survives_the_round_trip(self, emu):
+        """The corner that found the bug.
+
+        `Omega_m = 0.24` with `Sigma m_nu = 0.3` is inside the box by
+        construction; read the density convention the other way and CEmulator
+        refuses it as `Omegam = 0.2329 < 0.24`.  A design point falling out of
+        the box it was sampled inside is the only symptom this error has.
+        """
+        th = np.array([0.049, 0.24, 67.36, 0.9649, 2.1, -1.0, 0.0, 0.30])
+        target.set_cosmology(emu, th)
+        assert float(emu.Cosmo.Omegam) == pytest.approx(0.24, abs=1e-12)
 
     def test_the_round_trip_reproduces_sigma8(self, emu):
         """The conversions, end to end, against the emulator's own sigma_8."""
