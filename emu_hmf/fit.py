@@ -1,0 +1,170 @@
+r"""Fit the four Tinker08 parameters as functions of cosmology and redshift.
+
+What is minimised is the residual in :math:`\ln f`, over the peak-height range
+where the target means something (:data:`emu_hmf.target.NU_TRUSTED`).  In
+:math:`\ln` rather than in :math:`f` because :math:`f` spans four decades over
+that range and a linear loss would fit the low-:math:`\nu` end and ignore the
+clusters.
+
+The network predicts :math:`g`, a log-correction to each of
+:math:`(A, a, b, c)`, so :math:`g = 0` is Tinker08 unchanged and the fit starts
+there: the output layer is initialised to zero, which means epoch zero is
+exactly the published fit and every step after it is a measured improvement on
+one.  A fit that cannot get worse than its own starting point is a different
+kind of object from one that can.
+
+Needs ``optax``; that is the ``[train]`` extra.
+"""
+
+from __future__ import annotations
+
+import argparse
+import pathlib
+import time
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+
+from . import box, model, target
+
+__all__ = ["load_shards", "fit", "main"]
+
+
+def load_shards(shard_dir, nu_range=None):
+    r"""Every shard -> ``(x, sigma, ln_f, theta, z)`` flattened over (cosmology, z, M).
+
+    Rows outside ``nu_range`` are dropped here rather than weighted down: a
+    weight of zero and an absent row differ only in how long the optimiser
+    spends on them, and the reason for the cut is that the target is not
+    trustworthy there, which is not a statement about weighting.
+    """
+    lo, hi = target.NU_TRUSTED if nu_range is None else nu_range
+    files = sorted(pathlib.Path(shard_dir).glob("hmf_*.npz"))
+    if not files:
+        raise FileNotFoundError(f"no hmf_*.npz under {shard_dir}")
+    xs, sig, lnf, ths, zs = [], [], [], [], []
+    n_cosmo = n_failed = 0
+    for f in files:
+        with np.load(f) as d:
+            theta, fv, sg, z = d["theta"], d["f"], d["sigma"], d["z"]
+            n_cosmo += len(theta)
+            n_failed += len(d["failed_idx"])
+        n_c, n_z, n_m = fv.shape
+        th = np.repeat(theta[:, None, :], n_z, axis=1)         # (n_c, n_z, 8)
+        zz = np.broadcast_to(z[None, :], (n_c, n_z))
+        for arr, dest in ((th, ths), (zz, zs), (sg, sig), (fv, None)):
+            pass
+        nu = 1.686 / sg
+        ok = np.isfinite(fv) & (fv > 0) & (nu >= lo) & (nu <= hi)
+        ic, iz, im = np.nonzero(ok)
+        ths.append(th[ic, iz])
+        zs.append(zz[ic, iz])
+        sig.append(sg[ic, iz, im])
+        lnf.append(np.log(fv[ic, iz, im]))
+    theta = np.concatenate(ths).astype(np.float64)
+    z = np.concatenate(zs).astype(np.float64)
+    sigma = np.concatenate(sig).astype(np.float64)
+    ln_f = np.concatenate(lnf).astype(np.float64)
+    print(f"{len(files)} shards, {n_cosmo} cosmologies ({n_failed} refused) "
+          f"-> {len(ln_f)} rows in nu = [{lo}, {hi}]", flush=True)
+    return theta, z, sigma, ln_f
+
+
+def _init(key, sizes, scale=0.1):
+    """Zero output layer: epoch zero *is* Tinker08."""
+    p, n = {}, len(sizes) - 1
+    for i, (a, b) in enumerate(zip(sizes[:-1], sizes[1:])):
+        key, k1 = jax.random.split(key)
+        w = jax.random.normal(k1, (a, b)) * (scale * np.sqrt(2.0 / a))
+        p[f"W{i}"] = jnp.zeros((a, b)) if i == n - 1 else w
+        p[f"b{i}"] = jnp.zeros(b)
+    return p
+
+
+def fit(shard_dir, out, hidden=(64, 64), epochs=400, batch=4096, lr=3e-3,
+        seed=0, val_frac=0.1, nu_range=None):
+    import optax
+
+    theta, z, sigma, ln_f = load_shards(shard_dir, nu_range)
+    x = np.asarray(model.normalise(theta, z))
+    if x.ndim == 3:                     # normalise broadcasts; one row per point
+        x = x[np.arange(len(theta)), np.arange(len(theta))]
+    x = x.reshape(len(theta), -1)
+
+    rng = np.random.default_rng(seed)
+    perm = rng.permutation(len(x))
+    n_val = int(len(x) * val_frac)
+    val, tr = perm[:n_val], perm[n_val:]
+
+    sizes = [x.shape[1], *hidden, 4]
+    params = _init(jax.random.PRNGKey(seed), sizes)
+    opt = optax.adam(lr)
+    state = opt.init(params)
+
+    X = jnp.asarray(x); S = jnp.asarray(sigma); Z = jnp.asarray(z)
+    Y = jnp.asarray(ln_f)
+
+    def loss(p, idx):
+        g = model._mlp(p, X[idx])
+        pred = jnp.log(model.tinker08(S[idx], Z[idx], g))
+        return jnp.mean((pred - Y[idx]) ** 2)
+
+    @jax.jit
+    def step(p, s, idx):
+        l, grad = jax.value_and_grad(loss)(p, idx)
+        upd, s = opt.update(grad, s)
+        return optax.apply_updates(p, upd), s, l
+
+    base = float(np.sqrt(np.mean(
+        (np.asarray(jnp.log(model.tinker08(S[val], Z[val]))) - ln_f[val]) ** 2)))
+    print(f"Tinker08 unchanged, on the held-out split: rms {base:.5f} in ln f "
+          f"({np.expm1(base):.2%})", flush=True)
+
+    tr_j = jnp.asarray(tr)
+    best, best_p = float("inf"), params
+    n_batch = max(1, len(tr) // batch)
+    for ep in range(epochs):
+        t0 = time.time()
+        order = jnp.asarray(rng.permutation(len(tr)))
+        tot = 0.0
+        for b in range(n_batch):
+            idx = tr_j[order[b * batch:(b + 1) * batch]]
+            params, state, l = step(params, state, idx)
+            tot += float(l)
+        vl = float(loss(params, jnp.asarray(val)))
+        if vl < best:
+            best, best_p = vl, params
+        if (ep + 1) % 25 == 0 or ep == 0:
+            print(f"  epoch {ep + 1:4d}/{epochs}  train {tot / n_batch:.6f}  "
+                  f"val {vl:.6f}  rms {np.sqrt(vl):.5f}  "
+                  f"{time.time() - t0:.1f} s", flush=True)
+
+    out = pathlib.Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(out, **{k: np.asarray(v) for k, v in best_p.items()},
+             n_layers=np.int64(len(sizes) - 1),
+             val_rms=np.float64(np.sqrt(best)),
+             baseline_rms=np.float64(base),
+             nu_range=np.array(target.NU_TRUSTED if nu_range is None else nu_range),
+             params_order=np.array(list(box.PARAMS) + ["z"], dtype="U16"))
+    print(f"\nwrote {out}", flush=True)
+    print(f"  Tinker08 unchanged : rms {base:.5f} in ln f  ({np.expm1(base):.2%})")
+    print(f"  recalibrated       : rms {np.sqrt(best):.5f} in ln f  "
+          f"({np.expm1(np.sqrt(best)):.2%})")
+    print(f"  improvement        : {base / np.sqrt(best):.2f}x")
+    return out
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--shards", required=True)
+    ap.add_argument("--out", default="emu_hmf/data/emu_hmf_mlp.npz")
+    ap.add_argument("--epochs", type=int, default=400)
+    ap.add_argument("--hidden", type=int, nargs="*", default=[64, 64])
+    a = ap.parse_args(argv)
+    fit(a.shards, a.out, hidden=tuple(a.hidden), epochs=a.epochs)
+
+
+if __name__ == "__main__":       # pragma: no cover
+    main()

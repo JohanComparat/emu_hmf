@@ -41,7 +41,7 @@ import numpy as np
 
 from . import box
 
-__all__ = ["MASSDEFS", "DEFAULT_MASSDEF", "Z_TRAINED", "M_TRUSTED",
+__all__ = ["MASSDEFS", "DEFAULT_MASSDEF", "Z_TRAINED", "M_TRUSTED", "NU_TRUSTED",
            "csst_dndlnM",
            "csst_tinker08", "set_cosmology", "sigma_chain",
            "to_ggah_cosmology"]
@@ -84,6 +84,33 @@ Z_TRAINED = (0.0, 0.1, 0.25, 0.5, 0.8, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0)
 #: it.  A recalibration claimed to a per cent above this range would be
 #: claiming to reproduce the emulator's own noise.
 M_TRUSTED = (1e12, 1e14)
+
+#: Where the *fit* is made, in peak height rather than in mass.
+#:
+#: Also measured.  Against ``ggah_mod``'s own ``tinker08`` at the Planck
+#: fiducial, the emulator's multiplicity function sits at
+#:
+#: ==================  =========================  =======
+#: :math:`\nu` range   ratio                      median
+#: ==================  =========================  =======
+#: 0.5--2.0            0.983--1.055               1.018
+#: 0.5--2.5            0.983--1.128               1.023
+#: 0.5--3.0            0.983--1.229               1.027
+#: 0.5--4.0            0.983--1.353               1.032
+#: 0.5--6.0            0.983--2.192               1.036
+#: ==================  =========================  =======
+#:
+#: so a few per cent up to :math:`\nu \simeq 3` and then the exponential tail,
+#: where a per-cent error in :math:`\sigma` is a tens-of-per-cent error in
+#: :math:`f`.  Peak height is the right variable for the cut because it unifies
+#: mass and redshift: the same :math:`\nu = 3` is :math:`10^{15}\,M_\odot/h` at
+#: :math:`z = 0` and :math:`3\times10^{13}` at :math:`z = 2`, and a cut in mass
+#: alone would keep the tail at high redshift and discard signal at low.
+#:
+#: ``tinker08``'s own calibration stops at :math:`z = 2.5`
+#: (``ggah_mod.halos.mass_function.CALIBRATION``), so the upper end of this
+#: range is also roughly where the fit being corrected stops meaning anything.
+NU_TRUSTED = (0.5, 3.0)
 
 
 def to_ggah_cosmology(theta):

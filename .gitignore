@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# Campaign products.  The shards are a few hundred MB and are regenerable from
+# the design seed; the fitted weights are committed deliberately, when they
+# land.
+work/
