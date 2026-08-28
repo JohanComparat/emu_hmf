@@ -179,3 +179,56 @@ class TestTheMassDefinitionChoice:
                                               massdef=md, emu=emu)).ravel()
                 for md in ("RockstarM200m", "FoFM200c"))
         assert np.max(np.abs(a / b - 1.0)) > 0.02, (a, b)
+
+
+class TestTheValidationSplitIsHonest:
+    """A held-out row is not a held-out cosmology.
+
+    Each design contributes a few hundred rows -- twelve redshifts times the
+    masses inside the peak-height cut -- and at fixed cosmology ``ln f`` is a
+    smooth function of ``sigma``.  Split at random over rows and the network
+    validates by interpolating between neighbouring masses of a design it
+    trained on, which is a real measurement of something and not the one
+    anybody wants.  This correction is only ever asked for a cosmology it has
+    not seen.
+    """
+
+    def test_load_shards_reports_which_design_each_row_came_from(self, tmp_path):
+        from emu_hmf import fit
+
+        n_c, n_z, n_m = 3, 4, 5
+        rng = np.random.default_rng(0)
+        theta = np.array([box.sample(1, seed=s)[0] for s in (1, 2, 3)])
+        np.savez(tmp_path / "hmf_000.npz",
+                 theta=theta,
+                 f=np.full((n_c, n_z, n_m), 0.2),
+                 sigma=np.full((n_c, n_z, n_m), 1.686 / 1.5),
+                 z=np.linspace(0.0, 1.0, n_z),
+                 failed_idx=np.array([], dtype=np.int64))
+        *_, cid = fit.load_shards(str(tmp_path))
+        assert set(np.unique(cid).tolist()) == {0, 1, 2}
+        # Every design contributes the same number of rows here, so a row split
+        # would put two thirds of each design's rows in training.
+        assert np.bincount(cid).tolist() == [n_z * n_m] * n_c
+
+    def test_ids_stay_unique_across_shards(self, tmp_path):
+        """The bug this offset exists for.
+
+        Two shards each numbering their designs from zero would collide, and
+        the split would then hold out design 7 of shard 0 while training on
+        design 7 of shard 1 -- a different cosmology with the same label, which
+        looks like a clean split and is not one.
+        """
+        from emu_hmf import fit
+
+        n_z, n_m = 3, 4
+        for i in (0, 1):
+            theta = np.array([box.sample(1, seed=10 * i + s)[0] for s in (1, 2)])
+            np.savez(tmp_path / f"hmf_{i:03d}.npz",
+                     theta=theta,
+                     f=np.full((2, n_z, n_m), 0.2),
+                     sigma=np.full((2, n_z, n_m), 1.686 / 1.5),
+                     z=np.linspace(0.0, 1.0, n_z),
+                     failed_idx=np.array([], dtype=np.int64))
+        *_, cid = fit.load_shards(str(tmp_path))
+        assert set(np.unique(cid).tolist()) == {0, 1, 2, 3}, "shard ids collided"

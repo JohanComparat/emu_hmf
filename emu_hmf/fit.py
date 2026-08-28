@@ -43,7 +43,7 @@ def load_shards(shard_dir, nu_range=None):
     files = sorted(pathlib.Path(shard_dir).glob("hmf_*.npz"))
     if not files:
         raise FileNotFoundError(f"no hmf_*.npz under {shard_dir}")
-    xs, sig, lnf, ths, zs = [], [], [], [], []
+    xs, sig, lnf, ths, zs, cid = [], [], [], [], [], []
     n_cosmo = n_failed = 0
     for f in files:
         with np.load(f) as d:
@@ -62,10 +62,14 @@ def load_shards(shard_dir, nu_range=None):
         zs.append(zz[ic, iz])
         sig.append(sg[ic, iz, im])
         lnf.append(np.log(fv[ic, iz, im]))
+        # Which design each row came from, offset so the ids stay unique
+        # across shards.  `fit` splits on this and not on the row index.
+        cid.append(ic + (n_cosmo - len(theta)))
     theta = np.concatenate(ths).astype(np.float64)
     z = np.concatenate(zs).astype(np.float64)
     sigma = np.concatenate(sig).astype(np.float64)
     ln_f = np.concatenate(lnf).astype(np.float64)
+    cosmo_id = np.concatenate(cid).astype(np.int64)
     print(f"{len(files)} shards, {n_cosmo} cosmologies ({n_failed} refused) "
           f"-> {len(ln_f)} rows in nu = [{lo}, {hi}]", flush=True)
     # Carried out, not merely printed: what the weights were fitted on is part
@@ -74,7 +78,7 @@ def load_shards(shard_dir, nu_range=None):
     load_shards.provenance = {"n_shards": len(files), "n_cosmologies": n_cosmo,
                               "n_refused": n_failed, "n_rows": int(len(theta)),
                               "nu_lo": float(lo), "nu_hi": float(hi)}
-    return theta, z, sigma, ln_f
+    return theta, z, sigma, ln_f, cosmo_id
 
 
 def _init(key, sizes, scale=0.1):
@@ -92,16 +96,29 @@ def fit(shard_dir, out, hidden=(64, 64), epochs=400, batch=4096, lr=3e-3,
         seed=0, val_frac=0.1, nu_range=None):
     import optax
 
-    theta, z, sigma, ln_f = load_shards(shard_dir, nu_range)
+    theta, z, sigma, ln_f, cosmo_id = load_shards(shard_dir, nu_range)
     x = np.asarray(model.normalise(theta, z))
     if x.ndim == 3:                     # normalise broadcasts; one row per point
         x = x[np.arange(len(theta)), np.arange(len(theta))]
     x = x.reshape(len(theta), -1)
 
+    # Split on *cosmologies*, not on rows.  Each design contributes a few
+    # hundred rows -- twelve redshifts times the masses inside the peak-height
+    # cut -- and those rows are not independent: at fixed cosmology, ln f is a
+    # smooth function of sigma, so a random row split leaves the network
+    # interpolating between neighbouring masses of a design it has already
+    # seen.  That measures something real, but it is not generalisation to a
+    # new cosmology, which is the only thing this correction is ever asked
+    # for.  Measured on the first full run, the difference is not academic:
+    # the row split reported 0.59 per cent.
     rng = np.random.default_rng(seed)
-    perm = rng.permutation(len(x))
-    n_val = int(len(x) * val_frac)
-    val, tr = perm[:n_val], perm[n_val:]
+    ids = np.unique(cosmo_id)
+    n_held = max(1, int(round(len(ids) * val_frac)))
+    held = set(rng.permutation(ids)[:n_held].tolist())
+    in_val = np.isin(cosmo_id, list(held))
+    val, tr = np.nonzero(in_val)[0], np.nonzero(~in_val)[0]
+    print(f"held out {len(held)} of {len(ids)} cosmologies entirely "
+          f"({len(val)} of {len(cosmo_id)} rows)", flush=True)
 
     sizes = [x.shape[1], *hidden, 4]
     params = _init(jax.random.PRNGKey(seed), sizes)
@@ -148,7 +165,11 @@ def fit(shard_dir, out, hidden=(64, 64), epochs=400, batch=4096, lr=3e-3,
 
     out = pathlib.Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    prov = getattr(load_shards, "provenance", {})
+    prov = dict(getattr(load_shards, "provenance", {}))
+    # Recorded so the number the paper quotes cannot be mistaken for the
+    # optimistic one a row split would give.
+    prov["n_val_cosmologies"] = int(len(held))
+    prov["split_by_cosmology"] = 1
     np.savez(out, **{k: np.asarray(v) for k, v in best_p.items()},
              n_layers=np.int64(len(sizes) - 1),
              val_rms=np.float64(np.sqrt(best)),
