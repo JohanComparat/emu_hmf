@@ -55,7 +55,8 @@ CHUNK = 25
 K_GRID = np.logspace(-4.0, np.log10(200.0), 512)
 
 
-def solve_one(theta, emu, pk, z=None, m=None):
+def solve_one(theta, emu, pk, z=None, m=None,
+              massdef: str = target.DEFAULT_MASSDEF):
     r"""``(f_target, sigma, dlns)`` for one cosmology, shape ``(n_z, n_m)``.
 
     Raises whatever CLASS or the emulator raise: a refusal is data, and
@@ -77,14 +78,16 @@ def solve_one(theta, emu, pk, z=None, m=None):
     dlns = np.stack([np.asarray(dln_sigma_dln_mass(jnp.asarray(m), K_GRID, p, rho))
                      for p in p_cb])
 
-    dndlnm = np.asarray(target.csst_dndlnM(theta, z, m, emu=emu))
+    dndlnm = np.asarray(
+        target.csst_dndlnM(theta, z, m, massdef=massdef, emu=emu))
     dndlnm = dndlnm.reshape(len(z), len(m))
     f = dndlnm * m[None, :] / (rho * np.abs(dlns))
     return f, sig, dlns
 
 
 def shard(index: int, n_per_shard: int, out, n_total: int,
-          seed: int = 20260828, chunk: int = CHUNK):
+          seed: int = 20260828, chunk: int = CHUNK,
+          massdef: str = target.DEFAULT_MASSDEF):
     """Solve one contiguous slice of the design and write it.
 
     The design is regenerated from the seed rather than read from a file, so a
@@ -107,7 +110,8 @@ def shard(index: int, n_per_shard: int, out, n_total: int,
     t0 = time.monotonic()
     for j in range(lo, hi):
         try:
-            f, sig, dlns = solve_one(design[j], emu, pk)
+            f, sig, dlns = solve_one(design[j], emu, pk,
+                                     massdef=massdef)
         except Exception as exc:                      # noqa: BLE001
             failed.append(j)
             print(f"  design {j}: {type(exc).__name__}: {str(exc)[:70]}",
@@ -120,14 +124,15 @@ def shard(index: int, n_per_shard: int, out, n_total: int,
         dlnss.append(dlns)
         done = j - lo + 1
         if done % chunk == 0 or j == hi - 1:
-            _write(out, idx, thetas, fs, sigs, dlnss, failed)
+            _write(out, idx, thetas, fs, sigs, dlnss, failed, massdef)
             dt = time.monotonic() - t0
             print(f"  {done}/{hi - lo}  {dt:6.1f} s  "
                   f"(eta {dt * (hi - lo - done) / done:6.1f} s)", flush=True)
     return out
 
 
-def _write(out, idx, thetas, fs, sigs, dlnss, failed):
+def _write(out, idx, thetas, fs, sigs, dlnss, failed,
+           massdef: str = target.DEFAULT_MASSDEF):
     tmp = out.with_name(out.stem + ".part.npz")       # `savez` appends `.npz`
     np.savez_compressed(
         tmp,
@@ -139,6 +144,12 @@ def _write(out, idx, thetas, fs, sigs, dlnss, failed):
         z=np.array(target.Z_TRAINED, dtype=np.float64),
         m=M_GRID.astype(np.float64),
         failed_idx=np.array(sorted(set(failed)), dtype=np.int64),
+        # Which halo definition these f(sigma) belong to.  Recorded because
+        # the correction is fitted per definition and two shard sets now exist:
+        # a fit that silently averaged a 200m shard and a virial one would
+        # produce a correction for no definition at all, and every number in it
+        # would look reasonable.
+        massdef=np.array(str(massdef)),
     )
     tmp.rename(out)
 
@@ -150,8 +161,16 @@ def main(argv=None):
     ap.add_argument("--n-total", type=int, default=2000)
     ap.add_argument("--seed", type=int, default=20260828)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--massdef", default=target.DEFAULT_MASSDEF,
+                    choices=sorted(target.MASSDEFS),
+                    help="which of the emulator's halo definitions to fit "
+                         "against.  RockstarM200m and RockstarMvir are both "
+                         "spherical overdensities from the same finder, which "
+                         "is what makes comparing corrections across them a "
+                         "test of the definition and not of the finder.")
     a = ap.parse_args(argv)
-    shard(a.shard, a.n_per_shard, a.out, a.n_total, a.seed)
+    shard(a.shard, a.n_per_shard, a.out, a.n_total, a.seed,
+          massdef=a.massdef)
 
 
 if __name__ == "__main__":       # pragma: no cover

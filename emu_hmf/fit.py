@@ -43,6 +43,23 @@ def load_shards(shard_dir, nu_range=None):
     files = sorted(pathlib.Path(shard_dir).glob("hmf_*.npz"))
     if not files:
         raise FileNotFoundError(f"no hmf_*.npz under {shard_dir}")
+
+    # One definition per fit.  The correction is a correction *to tinker08 at a
+    # particular Delta*, so averaging shards from two definitions would fit a
+    # correction for neither -- and every number in the result would look
+    # entirely reasonable.  Shards written before this was recorded carry no
+    # `massdef` key and are read as the default, which is what they were.
+    defs = set()
+    for f in files:
+        with np.load(f) as d:
+            defs.add(str(d["massdef"]) if "massdef" in d
+                     else target.DEFAULT_MASSDEF)
+    if len(defs) > 1:
+        raise ValueError(
+            f"{shard_dir} mixes halo definitions {sorted(defs)}.  A correction "
+            "is fitted to one of them; fit them separately and compare the "
+            "results, which is the only way to learn whether they agree.")
+    massdef = defs.pop()
     xs, sig, lnf, ths, zs, cid = [], [], [], [], [], []
     n_cosmo = n_failed = 0
     for f in files:
@@ -70,12 +87,14 @@ def load_shards(shard_dir, nu_range=None):
     sigma = np.concatenate(sig).astype(np.float64)
     ln_f = np.concatenate(lnf).astype(np.float64)
     cosmo_id = np.concatenate(cid).astype(np.int64)
-    print(f"{len(files)} shards, {n_cosmo} cosmologies ({n_failed} refused) "
+    print(f"{len(files)} shards of {massdef}, {n_cosmo} cosmologies "
+          f"({n_failed} refused) "
           f"-> {len(ln_f)} rows in nu = [{lo}, {hi}]", flush=True)
     # Carried out, not merely printed: what the weights were fitted on is part
     # of what the weights mean, and a line on a terminal does not survive to
     # whatever quotes the accuracy six months later.
-    load_shards.provenance = {"n_shards": len(files), "n_cosmologies": n_cosmo,
+    load_shards.provenance = {"massdef": massdef,
+                              "n_shards": len(files), "n_cosmologies": n_cosmo,
                               "n_refused": n_failed, "n_rows": int(len(theta)),
                               "nu_lo": float(lo), "nu_hi": float(hi)}
     return theta, z, sigma, ln_f, cosmo_id
@@ -178,7 +197,9 @@ def fit(shard_dir, out, hidden=(64, 64), epochs=400, batch=4096, lr=3e-3,
              params_order=np.array(list(box.PARAMS) + ["z"], dtype="U16"),
              epochs=np.int64(epochs), hidden=np.asarray(hidden, dtype=np.int64),
              val_frac=np.float64(val_frac),
-             **{k: np.int64(v) if isinstance(v, int) else np.float64(v)
+             **{k: (np.array(v) if isinstance(v, str)
+                    else np.int64(v) if isinstance(v, int)
+                    else np.float64(v))
                 for k, v in prov.items()})
     print(f"\nwrote {out}", flush=True)
     print(f"  Tinker08 unchanged : rms {base:.5f} in ln f  ({np.expm1(base):.2%})")
