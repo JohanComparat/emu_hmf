@@ -27,6 +27,6 @@ Modules, in the order the work runs: :mod:`~emu_hmf.box` (the design space),
 reach it), :mod:`~emu_hmf.generate` (one CLASS solve and one emulator call per
 design), :mod:`~emu_hmf.model` (Tinker08 plus the MLP), :mod:`~emu_hmf.fit`.
 """
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = ["box", "target", "model", "__version__"]

@@ -9,3 +9,4 @@ dist/
 # the design seed; the fitted weights are committed deliberately, when they
 # land.
 work/
+plan_prompt.txt

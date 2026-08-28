@@ -35,9 +35,32 @@ import numpy as np
 
 from . import box
 
-__all__ = ["T08", "tinker08", "HmfCorrection", "load_weights", "DEFAULT_WEIGHTS"]
+__all__ = ["T08", "tinker08", "HmfCorrection", "load_weights",
+           "DEFAULT_WEIGHTS", "WEIGHTS"]
 
-DEFAULT_WEIGHTS = pathlib.Path(__file__).resolve().parent / "data" / "emu_hmf_mlp.npz"
+_DATA = pathlib.Path(__file__).resolve().parent / "data"
+
+#: One weights file per halo definition, because the correction is *not* the
+#: same function at two of them.
+#:
+#: That is measured rather than assumed.  Fitting the same architecture against
+#: the emulator's ``RockstarMvir`` -- a different overdensity from the *same*
+#: halo finder, so the comparison isolates the boundary -- gives a correction
+#: that reduces the residual just as well (10.9 per cent to 0.54, against 7.0 to
+#: 0.52 at 200m) and is a different function: the two disagree in
+#: :math:`f(\sigma)` by 4.4 per cent in the median and 10.8 rms, which is larger
+#: than the residual either achieves and comparable to the offset both correct.
+#:
+#: So there is no single correction with a Delta argument, and pretending
+#: otherwise would put an error the size of the correction into whichever
+#: definition was not fitted.  Two files, two registry entries in ``ggah_mod``,
+#: and a calibration guard that refuses to mix them.
+WEIGHTS = {
+    "200m": _DATA / "emu_hmf_mlp.npz",
+    "vir": _DATA / "emu_hmf_mlp_vir.npz",
+}
+#: The 200m correction, which is what ``HmfCorrection()`` builds unasked.
+DEFAULT_WEIGHTS = WEIGHTS["200m"]
 
 #: Tinker et al. (2008) Table 2 at :math:`\Delta_{\rm m} = 200`, and the
 #: published redshift evolution.  Restated here rather than imported from

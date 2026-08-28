@@ -245,10 +245,22 @@ class TestTheConversionRoundTrips:
 
     @pytest.mark.parametrize("mnu", [0.0, 0.06, 0.30])
     def test_theta_to_cosmology_and_back(self, mnu):
+        """The tolerance is the working precision's, not a fixed number.
+
+        This asserted `rel=1e-12` unconditionally, which is a float64 claim
+        made by a test that never said so: JAX defaults to float32, where the
+        round trip is good to ~1e-7 and cannot be better.  It passed only for
+        whoever happened to have `JAX_ENABLE_X64=1` in their environment.
+        Deriving the tolerance from the dtype tests the conversion in the mode
+        it is actually running in, in both modes.
+        """
+        import jax
+
         th = np.array([0.049, 0.31, 67.36, 0.9649, 2.1, -1.0, 0.0, mnu])
         back = np.asarray(target.theta_from_cosmology(
             target.to_ggah_cosmology(th)))
-        assert back == pytest.approx(th, rel=1e-12), dict(
+        rel = 1e-12 if jax.config.jax_enable_x64 else 1e-6
+        assert back == pytest.approx(th, rel=rel), dict(
             zip(box.PARAMS, back - th))
 
     def test_it_survives_tracing(self):
@@ -267,9 +279,11 @@ class TestTheConversionRoundTrips:
             return target.theta_from_cosmology(PLANCK18.replace(ln10A_s=a))[4]
 
         g = float(jax.grad(amp)(float(PLANCK18.ln10A_s)))
-        # A = exp(ln10A_s)/10, so dA/dln10A_s = A
+        # A = exp(ln10A_s)/10, so dA/dln10A_s = A.  Same precision caveat as
+        # the round trip above: in float32 the gradient is exact to ~1e-6.
+        rel = 1e-10 if jax.config.jax_enable_x64 else 1e-5
         assert g == pytest.approx(float(np.exp(PLANCK18.ln10A_s) / 10.0),
-                                  rel=1e-10)
+                                  rel=rel)
 
     def test_the_cold_density_is_what_crosses(self):
         """Not Omega_m: the box bounds the cold density."""
