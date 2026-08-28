@@ -232,3 +232,50 @@ class TestTheValidationSplitIsHonest:
                      failed_idx=np.array([], dtype=np.int64))
         *_, cid = fit.load_shards(str(tmp_path))
         assert set(np.unique(cid).tolist()) == {0, 1, 2, 3}, "shard ids collided"
+
+
+class TestTheConversionRoundTrips:
+    """Both directions, and the density that makes them differ.
+
+    `to_ggah_cosmology` and `theta_from_cosmology` are the only two places the
+    CSST/ggah_mod dialect is translated.  If they ever disagree, the halo layer
+    evaluates the correction at a cosmology that is not the one it was asked
+    for -- silently, because every value stays plausible.
+    """
+
+    @pytest.mark.parametrize("mnu", [0.0, 0.06, 0.30])
+    def test_theta_to_cosmology_and_back(self, mnu):
+        th = np.array([0.049, 0.31, 67.36, 0.9649, 2.1, -1.0, 0.0, mnu])
+        back = np.asarray(target.theta_from_cosmology(
+            target.to_ggah_cosmology(th)))
+        assert back == pytest.approx(th, rel=1e-12), dict(
+            zip(box.PARAMS, back - th))
+
+    def test_it_survives_tracing(self):
+        """The reason it is not just `to_ggah_cosmology` inverted.
+
+        This one is called from inside the halo layer's differentiable path,
+        so every field may be a tracer.  A `float()` anywhere in it would raise
+        a ConcretizationTypeError the first time somebody differentiated a mass
+        function -- which is exactly the use it exists for.
+        """
+        import jax
+
+        from ggah_mod.cosmology import PLANCK18
+
+        def amp(a):
+            return target.theta_from_cosmology(PLANCK18.replace(ln10A_s=a))[4]
+
+        g = float(jax.grad(amp)(float(PLANCK18.ln10A_s)))
+        # A = exp(ln10A_s)/10, so dA/dln10A_s = A
+        assert g == pytest.approx(float(np.exp(PLANCK18.ln10A_s) / 10.0),
+                                  rel=1e-10)
+
+    def test_the_cold_density_is_what_crosses(self):
+        """Not Omega_m: the box bounds the cold density."""
+        from ggah_mod.cosmology import Cosmology
+
+        c = Cosmology.create(sum_mnu=0.3)
+        th = np.asarray(target.theta_from_cosmology(c))
+        assert th[1] == pytest.approx(float(c.Omega_cb), rel=1e-12)
+        assert th[1] < float(c.Omega_m)

@@ -41,10 +41,9 @@ import numpy as np
 
 from . import box
 
-__all__ = ["MASSDEFS", "DEFAULT_MASSDEF", "Z_TRAINED", "M_TRUSTED", "NU_TRUSTED",
-           "csst_dndlnM",
-           "csst_tinker08", "set_cosmology", "sigma_chain",
-           "to_ggah_cosmology"]
+__all__ = ["MASSDEFS", "DEFAULT_MASSDEF", "Z_TRAINED", "M_TRUSTED",
+           "NU_TRUSTED", "csst_dndlnM", "csst_tinker08", "set_cosmology",
+           "sigma_chain", "to_ggah_cosmology", "theta_from_cosmology"]
 
 #: The three the emulator was trained on, and what each one *is*.
 MASSDEFS = {
@@ -145,6 +144,39 @@ def to_ggah_cosmology(theta):
               sum_mnu=d["mnu"], w0=d["w"], wa=d["wa"])
     probe = Cosmology.create(Omega_m=d["Omegam"], **kw)
     return Cosmology.create(Omega_m=d["Omegam"] + float(probe.Omega_nu), **kw)
+
+
+def theta_from_cosmology(cosmo):
+    r"""A ``ggah_mod`` ``Cosmology`` -> CSST's eight, in :data:`box.PARAMS` order.
+
+    The inverse of :func:`to_ggah_cosmology`, and it lives here for the same
+    reason that one does: this package owns the convention, and a second
+    implementation of it in ``ggah_mod`` would be a second thing to keep in
+    step.  ``tests/test_target.py`` pins the round trip in both directions.
+
+    Traceable, unlike its inverse.  ``to_ggah_cosmology`` builds a
+    ``Cosmology`` from concrete numbers and can afford ``float()``; this one is
+    called from inside the halo layer's differentiable path, where every value
+    may be a tracer, so it does arithmetic in ``jnp`` and never asks for a
+    concrete value.  The two directions genuinely need different treatment,
+    which is why this is not a one-line inversion.
+
+    The density is the trap, as it is going the other way: CSST's ``Omegam`` is
+    the cold density, so it comes from :attr:`Omega_cb` and not from
+    :attr:`Omega_m`.
+    """
+    import jax.numpy as jnp
+
+    return jnp.stack([
+        jnp.asarray(cosmo.Omega_b),
+        jnp.asarray(cosmo.Omega_cb),            # cold, not total
+        jnp.asarray(cosmo.h) * 100.0,
+        jnp.asarray(cosmo.n_s),
+        jnp.exp(jnp.asarray(cosmo.ln10A_s)) / 10.0,   # ln(1e10 A_s) -> 1e9 A_s
+        jnp.asarray(cosmo.w0),
+        jnp.asarray(cosmo.wa),
+        jnp.asarray(cosmo.sum_mnu),
+    ])
 
 
 def set_cosmology(emu, theta):
