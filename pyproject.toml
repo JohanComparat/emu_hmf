@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "emu_hmf"
-version = "0.1.0.dev0"
+version = "0.2.0"
 description = "A differentiable recalibration of Tinker08 against the CSST halo-mass-function emulator"
 requires-python = ">=3.10"
 # Core: what an *inference* needs.  Everything that generates the training set
