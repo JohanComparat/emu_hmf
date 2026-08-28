@@ -1,0 +1,53 @@
+cff-version: 1.2.0
+title: "emu_hmf: a differentiable, cosmology-dependent recalibration of the Tinker08 halo multiplicity function"
+message: "If you use this software, please cite it together with the works it is built on (references below)."
+type: software
+authors:
+  - family-names: Comparat
+    given-names: Johan
+    email: johan.comparat@pm.me
+repository-code: "https://github.com/JohanComparat/emu_hmf"
+url: "https://emu-hmf.readthedocs.io"
+license: MIT
+version: 1.0.0
+date-released: 2026-08-29
+keywords:
+  - cosmology
+  - halo mass function
+  - large-scale structure
+  - emulator
+  - automatic differentiation
+references:
+  - type: article
+    title: "Toward a Halo Mass Function for Precision Cosmology: The Limits of Universality"
+    authors:
+      - family-names: Tinker
+        given-names: Jeremy
+      - family-names: Kravtsov
+        given-names: "Andrey V."
+      - family-names: Klypin
+        given-names: Anatoly
+      - family-names: Abazajian
+        given-names: Kevork
+      - family-names: Warren
+        given-names: Michael
+      - family-names: Yepes
+        given-names: Gustavo
+      - family-names: Gottlöber
+        given-names: Stefan
+      - family-names: Holz
+        given-names: "Daniel E."
+    journal: "The Astrophysical Journal"
+    volume: 688
+    start: 709
+    year: 2008
+    doi: 10.1086/591439
+  - type: software
+    title: "CEmulator: emulators for the CSST simulation suite"
+    authors:
+      - family-names: Chen
+        given-names: Zhao
+      - family-names: Yu
+        given-names: Yu
+    year: 2025
+    repository-code: "https://github.com/czymh/CEmulator"

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import functools
 import pathlib
+import types
 
 import jax
 import jax.numpy as jnp
@@ -47,9 +48,9 @@ _DATA = pathlib.Path(__file__).resolve().parent / "data"
 #: the emulator's ``RockstarMvir`` -- a different overdensity from the *same*
 #: halo finder, so the comparison isolates the boundary -- gives a correction
 #: that reduces the residual just as well (10.9 per cent to 0.54, against 7.0 to
-#: 0.52 at 200m) and is a different function: the two disagree in
-#: :math:`f(\sigma)` by 4.4 per cent in the median and 10.8 rms, which is larger
-#: than the residual either achieves and comparable to the offset both correct.
+#: 0.52 at 200m) and is a different function: over the peak heights both were
+#: fitted on the two disagree by far more than the residual either achieves,
+#: and by a margin comparable to the offset they both correct.
 #:
 #: So there is no single correction with a Delta argument, and pretending
 #: otherwise would put an error the size of the correction into whichever
@@ -65,8 +66,9 @@ DEFAULT_WEIGHTS = WEIGHTS["200m"]
 #: Tinker et al. (2008) Table 2 at :math:`\Delta_{\rm m} = 200`, and the
 #: published redshift evolution.  Restated here rather than imported from
 #: ``ggah_mod`` because this module is the one that must import nothing ---
-#: ``tests/test_model.py`` asserts the two agree to round-off, which is what
-#: makes the restatement safe.
+#: ``tests/test_model.py`` asserts this against the published table written out
+#: independently, and against the halo-model code's own Tinker08 wherever that
+#: is installed -- which is what makes the restatement safe.
 T08 = {"A0": 0.186, "a0": 1.47, "b0": 2.57, "c0": 1.19,
        "Az": -0.14, "az": -0.06}
 
@@ -115,7 +117,15 @@ def normalise(theta, z, z_max=3.0):
 
 
 @functools.lru_cache(maxsize=4)
-def load_weights(path=None) -> dict:
+def load_weights(path=None):
+    """The arrays in a weights file, read once per path and then shared.
+
+    Read-only, both ways round: the mapping is a proxy and the arrays have
+    their write flag cleared.  The cache hands the *same* objects to every
+    caller, so a mutation by one would silently change the correction every
+    other caller evaluates -- and a network whose weights moved would still
+    return entirely plausible numbers.
+    """
     p = DEFAULT_WEIGHTS if path is None else pathlib.Path(path)
     if not p.exists():
         raise FileNotFoundError(
@@ -123,7 +133,12 @@ def load_weights(path=None) -> dict:
             "generated training set, or point `HmfCorrection(weights=...)` "
             "at one.")
     with np.load(p) as d:
-        return {k: np.asarray(d[k]) for k in d.files}
+        w = {}
+        for k in d.files:
+            a = np.asarray(d[k])
+            a.flags.writeable = False
+            w[k] = a
+    return types.MappingProxyType(w)
 
 
 class HmfCorrection:
@@ -142,7 +157,7 @@ class HmfCorrection:
         self._check_box = bool(check_box)
         self.meta = {k: w[k] for k in w if k not in self._p}
 
-    def _validate(self, theta, z):
+    def _validate(self, theta):
         if not self._check_box:
             return
         vals = {}
@@ -159,7 +174,7 @@ class HmfCorrection:
 
     def fsigma(self, sigma, theta, z=0.0):
         r""":math:`f(\sigma)` for this cosmology and redshift."""
-        self._validate(theta, z)
+        self._validate(theta)
         g = self.g(theta, z)
         g = g[0] if jnp.ndim(z) == 0 else g
         return tinker08(sigma, z, g)

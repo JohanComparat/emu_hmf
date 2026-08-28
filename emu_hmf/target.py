@@ -42,8 +42,20 @@ import numpy as np
 from . import box
 
 __all__ = ["MASSDEFS", "DEFAULT_MASSDEF", "Z_TRAINED", "M_TRUSTED",
-           "NU_TRUSTED", "csst_dndlnM", "csst_tinker08", "set_cosmology",
-           "sigma_chain", "to_ggah_cosmology", "theta_from_cosmology"]
+           "NU_TRUSTED", "NU_COVERED", "nu_covered", "DELTA_C", "FIDUCIAL", "csst_dndlnM", "csst_tinker08",
+           "set_cosmology", "sigma_chain", "to_ggah_cosmology",
+           "theta_from_cosmology"]
+
+#: Spherical-collapse threshold, :math:`\delta_c`, in the
+#: :math:`\nu = \delta_c/\sigma` that :data:`NU_TRUSTED` is stated in.
+#:
+#: The Einstein--de Sitter value, held fixed rather than made cosmology
+#: dependent, because that is the convention Tinker08 was calibrated in and
+#: this package's whole design is to leave the carrier alone.  A
+#: cosmology-dependent :math:`\delta_c` would move the peak-height cut with
+#: the cosmology and make the training range mean a slightly different thing at
+#: every design point.
+DELTA_C = 1.686
 
 #: The three the emulator was trained on, and what each one *is*.
 MASSDEFS = {
@@ -110,6 +122,40 @@ M_TRUSTED = (1e12, 1e14)
 #: (``ggah_mod.halos.mass_function.CALIBRATION``), so the upper end of this
 #: range is also roughly where the fit being corrected stops meaning anything.
 NU_TRUSTED = (0.5, 3.0)
+
+
+#: What the training set *actually* spans at each trained redshift.
+#:
+#: :data:`NU_TRUSTED` states the peak heights the emulator can be trusted over,
+#: but the training set is bounded in mass as well (:data:`M_TRUSTED`), and the
+#: two cuts do not commute with redshift.  Growth pushes :math:`\sigma` down, so
+#: a fixed mass is a higher peak at higher :math:`z`: the same
+#: :math:`10^{12}\,M_\odot/h` that sits at :math:`\nu = 0.5` today sits at
+#: :math:`\nu = 1.4` at :math:`z = 3`.  The low-:math:`\nu` half of the band is
+#: therefore simply absent above :math:`z \simeq 0.25`, and a correction
+#: evaluated there is an extrapolation whatever :data:`NU_TRUSTED` says.
+#:
+#: Measured on the shipped training set, as ``z -> (nu_lo, nu_hi)``:
+NU_COVERED = {
+    0.00: (0.50, 2.97), 0.10: (0.50, 2.99), 0.25: (0.50, 3.00),
+    0.50: (0.55, 3.00), 0.80: (0.65, 3.00), 1.00: (0.71, 3.00),
+    1.25: (0.80, 3.00), 1.50: (0.88, 3.00), 1.75: (0.97, 3.00),
+    2.00: (1.05, 3.00), 2.50: (1.23, 3.00), 3.00: (1.40, 3.00),
+}
+
+
+def nu_covered(z):
+    r"""``(nu_lo, nu_hi)`` the training set spans at redshift ``z``.
+
+    Linear in ``z`` between the trained redshifts, clamped outside them.  Use
+    it to ask whether a :math:`(\sigma, z)` was actually fitted, rather than
+    only whether it is inside :data:`NU_TRUSTED` --- above :math:`z \simeq
+    0.25` those are different questions.
+    """
+    zs = np.array(sorted(NU_COVERED))
+    lo = np.interp(z, zs, [NU_COVERED[k][0] for k in zs])
+    hi = np.interp(z, zs, [NU_COVERED[k][1] for k in zs])
+    return float(lo), float(hi)
 
 
 def to_ggah_cosmology(theta):
@@ -247,15 +293,18 @@ def _emulator(theta=None):
     from ggah_mod.halos._cemulator_compat import ensure_cemulator_works
     from CEmulator.Emulator import HMF_CEmulator
     emu = HMF_CEmulator()
-    set_cosmology(emu, _FIDUCIAL if theta is None else theta)
+    set_cosmology(emu, FIDUCIAL if theta is None else theta)
     ensure_cemulator_works(emu)
     if theta is not None:
         set_cosmology(emu, theta)
     return emu
 
 
-#: A point in the middle of the box, used only to probe the shim.
-_FIDUCIAL = np.array([0.049, 0.31, 67.36, 0.9649, 2.1, -1.0, 0.0, 0.06])
+#: A Planck-like point in the middle of the CSST box, in :data:`box.PARAMS`
+#: order.  Public because it is the cosmology every worked example, figure and
+#: quoted number in this package is evaluated at, and one definition of it is
+#: better than five.
+FIDUCIAL = np.array([0.049, 0.31, 67.36, 0.9649, 2.1, -1.0, 0.0, 0.06])
 
 
 def sigma_chain(theta, z, m, pk=None):

@@ -1,0 +1,23 @@
+version: 2
+
+build:
+  os: ubuntu-22.04
+  tools:
+    python: "3.11"
+
+# The package itself, and sphinx.  Deliberately *not* the generation stack:
+# every figure is committed and every page is written to render from numpy,
+# JAX and the shipped weights alone, so the builder needs no Boltzmann solver
+# and no Gaussian-process emulator.
+python:
+  install:
+    - method: pip
+      path: .
+    - requirements: docs/requirements.txt
+
+sphinx:
+  configuration: docs/conf.py
+  fail_on_warning: true
+
+formats:
+  - pdf

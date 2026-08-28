@@ -145,10 +145,9 @@ def _write(out, idx, thetas, fs, sigs, dlnss, failed,
         m=M_GRID.astype(np.float64),
         failed_idx=np.array(sorted(set(failed)), dtype=np.int64),
         # Which halo definition these f(sigma) belong to.  Recorded because
-        # the correction is fitted per definition and two shard sets now exist:
-        # a fit that silently averaged a 200m shard and a virial one would
-        # produce a correction for no definition at all, and every number in it
-        # would look reasonable.
+        # the correction is fitted per definition: a fit that silently averaged
+        # a 200m shard and a virial one would produce a correction for no
+        # definition at all, and every number in it would look reasonable.
         massdef=np.array(str(massdef)),
     )
     tmp.rename(out)

@@ -19,6 +19,7 @@ Needs ``optax``; that is the ``[train]`` extra.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import pathlib
 import time
 
@@ -28,11 +29,29 @@ import numpy as np
 
 from . import box, model, target
 
-__all__ = ["load_shards", "fit", "main"]
+__all__ = ["Shards", "load_shards", "fit", "main"]
 
 
-def load_shards(shard_dir, nu_range=None):
-    r"""Every shard -> ``(x, sigma, ln_f, theta, z)`` flattened over (cosmology, z, M).
+@dataclasses.dataclass(frozen=True)
+class Shards:
+    """One flat training set, and the record of what it was built from.
+
+    ``provenance`` travels with the arrays rather than beside them.  What the
+    weights were fitted on is part of what the weights mean, and it is written
+    into the ``.npz`` at the end of :func:`fit`, so whatever quotes the
+    accuracy later can read the sample size out of the same file.
+    """
+
+    theta: np.ndarray          #: ``(n_rows, 8)`` in :data:`emu_hmf.box.PARAMS` order
+    z: np.ndarray              #: ``(n_rows,)``
+    sigma: np.ndarray          #: ``(n_rows,)``
+    ln_f: np.ndarray           #: ``(n_rows,)`` -- what is fitted
+    cosmo_id: np.ndarray       #: ``(n_rows,)`` which design each row came from
+    provenance: dict
+
+
+def load_shards(shard_dir, nu_range=None) -> "Shards":
+    r"""Every shard in ``shard_dir`` -> one :class:`Shards`, flat over (cosmology, z, M).
 
     Rows outside ``nu_range`` are dropped here rather than weighted down: a
     weight of zero and an absent row differ only in how long the optimiser
@@ -47,20 +66,24 @@ def load_shards(shard_dir, nu_range=None):
     # One definition per fit.  The correction is a correction *to tinker08 at a
     # particular Delta*, so averaging shards from two definitions would fit a
     # correction for neither -- and every number in the result would look
-    # entirely reasonable.  Shards written before this was recorded carry no
-    # `massdef` key and are read as the default, which is what they were.
+    # entirely reasonable.
     defs = set()
     for f in files:
         with np.load(f) as d:
-            defs.add(str(d["massdef"]) if "massdef" in d
-                     else target.DEFAULT_MASSDEF)
+            if "massdef" not in d:
+                raise ValueError(
+                    f"{f.name} does not say which halo definition it holds.  "
+                    "A shard that cannot name its own mass definition cannot "
+                    "be fitted, because the correction is a correction to "
+                    "tinker08 at a particular Delta.")
+            defs.add(str(d["massdef"]))
     if len(defs) > 1:
         raise ValueError(
             f"{shard_dir} mixes halo definitions {sorted(defs)}.  A correction "
             "is fitted to one of them; fit them separately and compare the "
             "results, which is the only way to learn whether they agree.")
     massdef = defs.pop()
-    xs, sig, lnf, ths, zs, cid = [], [], [], [], [], []
+    sig, lnf, ths, zs, cid = [], [], [], [], []
     n_cosmo = n_failed = 0
     for f in files:
         with np.load(f) as d:
@@ -70,9 +93,7 @@ def load_shards(shard_dir, nu_range=None):
         n_c, n_z, n_m = fv.shape
         th = np.repeat(theta[:, None, :], n_z, axis=1)         # (n_c, n_z, 8)
         zz = np.broadcast_to(z[None, :], (n_c, n_z))
-        for arr, dest in ((th, ths), (zz, zs), (sg, sig), (fv, None)):
-            pass
-        nu = 1.686 / sg
+        nu = target.DELTA_C / sg
         ok = np.isfinite(fv) & (fv > 0) & (nu >= lo) & (nu <= hi)
         ic, iz, im = np.nonzero(ok)
         ths.append(th[ic, iz])
@@ -90,14 +111,12 @@ def load_shards(shard_dir, nu_range=None):
     print(f"{len(files)} shards of {massdef}, {n_cosmo} cosmologies "
           f"({n_failed} refused) "
           f"-> {len(ln_f)} rows in nu = [{lo}, {hi}]", flush=True)
-    # Carried out, not merely printed: what the weights were fitted on is part
-    # of what the weights mean, and a line on a terminal does not survive to
-    # whatever quotes the accuracy six months later.
-    load_shards.provenance = {"massdef": massdef,
-                              "n_shards": len(files), "n_cosmologies": n_cosmo,
-                              "n_refused": n_failed, "n_rows": int(len(theta)),
-                              "nu_lo": float(lo), "nu_hi": float(hi)}
-    return theta, z, sigma, ln_f, cosmo_id
+    return Shards(theta=theta, z=z, sigma=sigma, ln_f=ln_f,
+                  cosmo_id=cosmo_id,
+                  provenance={"massdef": massdef, "n_shards": len(files),
+                              "n_cosmologies": n_cosmo, "n_refused": n_failed,
+                              "n_rows": int(len(theta)),
+                              "nu_lo": float(lo), "nu_hi": float(hi)})
 
 
 def _init(key, sizes, scale=0.1):
@@ -113,13 +132,19 @@ def _init(key, sizes, scale=0.1):
 
 def fit(shard_dir, out, hidden=(64, 64), epochs=400, batch=4096, lr=3e-3,
         seed=0, val_frac=0.1, nu_range=None):
+    # Float64, always.  A network fitted in single precision and one fitted in
+    # double are two different sets of weights, and which one a run produced
+    # would otherwise depend on an environment variable set somewhere else.
+    # The residual being measured is half a per cent; the precision it is
+    # measured at is not a detail to leave to the caller.
+    jax.config.update("jax_enable_x64", True)
     import optax
 
-    theta, z, sigma, ln_f, cosmo_id = load_shards(shard_dir, nu_range)
+    d = load_shards(shard_dir, nu_range)
+    theta, z, sigma, ln_f, cosmo_id = (d.theta, d.z, d.sigma, d.ln_f,
+                                       d.cosmo_id)
     x = np.asarray(model.normalise(theta, z))
-    if x.ndim == 3:                     # normalise broadcasts; one row per point
-        x = x[np.arange(len(theta)), np.arange(len(theta))]
-    x = x.reshape(len(theta), -1)
+    assert x.shape == (len(theta), len(box.PARAMS) + 1), x.shape
 
     # Split on *cosmologies*, not on rows.  Each design contributes a few
     # hundred rows -- twelve redshifts times the masses inside the peak-height
@@ -184,7 +209,7 @@ def fit(shard_dir, out, hidden=(64, 64), epochs=400, batch=4096, lr=3e-3,
 
     out = pathlib.Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    prov = dict(getattr(load_shards, "provenance", {}))
+    prov = dict(d.provenance)
     # Recorded so the number the paper quotes cannot be mistaken for the
     # optimistic one a row split would give.
     prov["n_val_cosmologies"] = int(len(held))

@@ -1,0 +1,38 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      # Deliberately the plain install plus [dev]: no CSST emulator, no CLASS,
+      # no halo-model code.  The suite is meant to pass in the environment
+      # `pip install emu_hmf` creates, and this job is what keeps that true.
+      - run: pip install -e ".[dev]"
+      - run: python -m pytest -q --cov=emu_hmf --cov-report=term-missing
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install . -r docs/requirements.txt
+      # `-W`: a broken cross-reference fails the build rather than becoming a
+      # dead link nobody notices.  The figures are committed, so this needs
+      # neither matplotlib nor the generation stack.
+      - run: python -m sphinx -W -b html docs docs/_build/html

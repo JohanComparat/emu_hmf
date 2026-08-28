@@ -4,9 +4,14 @@ __pycache__/
 .pytest_cache/
 build/
 dist/
+docs/_build/
+.coverage
+coverage.xml
+htmlcov/
 
-# Campaign products.  The shards are a few hundred MB and are regenerable from
-# the design seed; the fitted weights are committed deliberately, when they
-# land.
+# The campaign's working directory.  The training shards live here -- 11.7 MB
+# for both mass definitions -- and are archived with a DOI rather than
+# committed; the design they came from is regenerable from its seed alone.
+# The trained weights, by contrast, are committed deliberately: they are the
+# package.
 work/
-plan_prompt.txt

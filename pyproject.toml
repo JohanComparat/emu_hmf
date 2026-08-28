@@ -1,25 +1,71 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "emu_hmf"
-version = "0.3.0"
-description = "A differentiable recalibration of Tinker08 against the CSST halo-mass-function emulator"
+version = "1.0.0"
+description = "A differentiable, cosmology-dependent recalibration of the Tinker08 halo multiplicity function"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
-# Core: what an *inference* needs.  Everything that generates the training set
-# or fits it is an extra, for the reason `emu_pk` states -- a package meant to
-# be imported by a forecast cannot make the forecast install a
-# Gaussian-process emulator, a Boltzmann solver, or an optimiser.
+authors = [{name = "Johan Comparat", email = "johan.comparat@pm.me"}]
+keywords = [
+    "cosmology", "halo mass function", "large-scale structure",
+    "emulator", "jax", "automatic differentiation", "Tinker08",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+]
+# Two, and that is the point.  Evaluating the recalibrated mass function needs
+# numpy and JAX and nothing else -- no Boltzmann solver, no Gaussian-process
+# emulator, no training stack.  `tests/test_public_api.py` asserts that an
+# environment holding only these two can import the package, build a
+# correction and differentiate it.
 dependencies = ["numpy>=1.24", "jax>=0.4.20"]
 
 [project.optional-dependencies]
-gen = ["CEmulator", "ggah_mod", "emu_pk"]
+# Refitting the network from a downloaded training set.  This one is a real
+# extra: `pip install emu_hmf[train]` resolves, and it is all an outsider needs
+# to reproduce the shipped weights from the archived shards.
 train = ["optax>=0.1.7"]
-dev = ["pytest>=7"]
+dev = ["pytest>=7", "pytest-cov", "optax>=0.1.7", "build"]
+docs = ["sphinx", "sphinx-rtd-theme", "myst-parser", "matplotlib"]
+
+# Regenerating the *training set* needs CLASS and the CSST emulator, which are
+# not distributed on PyPI.  Declaring them here would produce an extra that
+# cannot resolve, so the recipe lives in `environment-gen.yml` and in the
+# documentation's "Reproducing the training set" page instead.
+
+[project.urls]
+Homepage = "https://github.com/JohanComparat/emu_hmf"
+Documentation = "https://emu-hmf.readthedocs.io"
+Source = "https://github.com/JohanComparat/emu_hmf"
+Issues = "https://github.com/JohanComparat/emu_hmf/issues"
 
 [tool.setuptools.packages.find]
 include = ["emu_hmf*"]
 
+# The trained weights are the package, not a build artefact.  Without this glob
+# a wheel installs the code and none of its data, and `HmfCorrection()` raises
+# `FileNotFoundError` on first use -- which `tests/test_packaging.py` is there
+# to catch before a release does.
+[tool.setuptools.package-data]
+"emu_hmf.data" = ["*.npz"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "gen: needs the training-set stack (CEmulator, CLASS, ggah_mod)",
+    "slow: builds a wheel or trains a network",
+]

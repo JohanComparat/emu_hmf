@@ -1,0 +1,25 @@
+# The environment for *regenerating the training set* -- not for using the
+# package.  Evaluating the recalibrated mass function needs `pip install
+# emu_hmf` and nothing else; this file exists only for the offline half.
+#
+# Two of the packages below are not distributed on PyPI, which is why the
+# generation stack is a documented recipe rather than a `[gen]` extra that
+# could never resolve.
+name: emu_hmf_gen
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy>=1.24
+  - scipy
+  - pip
+  - classy            # CLASS, for sigma(M) everywhere the CSST box goes
+  - pip:
+      - jax>=0.4.20
+      - optax>=0.1.7
+      - "emu_hmf[train]"
+      # The CSST halo-mass-function emulator: the target being fitted.
+      - "git+https://github.com/czymh/CEmulator"
+      # The halo-model code that supplies the variance convention, the
+      # cosmology dataclass and the emulator's numpy-2 compatibility shim.
+      - "git+https://github.com/JohanComparat/ggah_mod"

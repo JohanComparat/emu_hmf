@@ -1,0 +1,7 @@
+include LICENSE README.md CHANGELOG.md CITATION.cff
+include environment-gen.yml
+recursive-include emu_hmf/data *.npz
+recursive-include tests *.py
+recursive-include docs *.rst *.py *.txt *.png *.npz Makefile
+prune docs/_build
+global-exclude __pycache__ *.py[cod]
