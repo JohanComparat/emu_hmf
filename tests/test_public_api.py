@@ -12,7 +12,10 @@ import importlib.resources
 import pathlib
 import subprocess
 import sys
-import tomllib
+try:
+    import tomllib                    # 3.11+
+except ModuleNotFoundError:          # 3.10, where it does not exist yet
+    import tomli as tomllib          # the `[dev]` extra supplies it there
 
 import numpy as np
 import pytest

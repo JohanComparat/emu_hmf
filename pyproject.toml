@@ -39,7 +39,10 @@ dependencies = ["numpy>=1.24", "jax>=0.4.20"]
 # extra: `pip install emu_hmf[train]` resolves, and it is all an outsider needs
 # to reproduce the shipped weights from the archived shards.
 train = ["optax>=0.1.7"]
-dev = ["pytest>=7", "pytest-cov", "optax>=0.1.7", "build"]
+dev = ["pytest>=7", "pytest-cov", "optax>=0.1.7", "build",
+       # `tomllib` is 3.11+; on 3.10 `test_public_api.py` reads the
+       # metadata through its predecessor instead.
+       'tomli>=2.0; python_version < "3.11"']
 docs = ["sphinx", "sphinx-rtd-theme", "myst-parser", "matplotlib"]
 
 # Regenerating the *training set* needs CLASS and the CSST emulator, which are
