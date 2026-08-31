@@ -2,9 +2,9 @@
 
 [![tests](https://github.com/JohanComparat/emu_hmf/actions/workflows/ci.yml/badge.svg)](https://github.com/JohanComparat/emu_hmf/actions/workflows/ci.yml)
 [![docs](https://readthedocs.org/projects/emu-hmf/badge/?version=latest)](https://emu-hmf.readthedocs.io/en/latest/)
-[![PyPI](https://img.shields.io/pypi/v/emu_hmf.svg)](https://pypi.org/project/emu_hmf/)
-[![Python](https://img.shields.io/pypi/pyversions/emu_hmf.svg)](https://pypi.org/project/emu_hmf/)
-[![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/emu-hmf?logo=pypi&logoColor=white)](https://pypi.org/project/emu-hmf/)
+[![Python](https://img.shields.io/pypi/pyversions/emu-hmf?logo=python&logoColor=white)](https://pypi.org/project/emu-hmf/)
+[![License](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE)
 
 A differentiable, cosmology-dependent recalibration of the Tinker et al. (2008)
 halo multiplicity function, trained against the CSST emulator
