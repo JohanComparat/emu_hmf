@@ -8,9 +8,10 @@ simulations it is calibrated against, and the recalibration itself.
 *Toward a Halo Mass Function for Precision Cosmology: The Limits of
 Universality*, ApJ 688, 709.  `doi:10.1086/591439 <https://doi.org/10.1086/591439>`_
 
-**The target.**  Chen, Z. & Yu, Y. 2025, the CSST emulator suite
-(``CEmulator``), https://github.com/czymh/CEmulator --- the emulated halo mass
-function this package is recalibrated against, and the box it is defined on.
+**The target.**  Chen, Z. & Yu, Y. 2025, CSSTemu, the CSST emulator suite,
+https://github.com/czymh/csstemu --- the emulated halo mass function this
+package is recalibrated against, and the box it is defined on.  It installs
+under its own name and imports as ``CEmulator``.
 
 **This package.**  See ``CITATION.cff`` in the repository, which GitHub renders
 as a *Cite this repository* button and which carries the archived DOI for the

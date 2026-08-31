@@ -18,8 +18,9 @@ dependencies:
       - jax>=0.4.20
       - optax>=0.1.7
       - "emu_hmf[train]"
-      # The CSST halo-mass-function emulator: the target being fitted.
-      - "git+https://github.com/czymh/CEmulator"
+      # CSSTemu, the CSST halo-mass-function emulator: the target being
+      # fitted.  Installs as the importable package ``CEmulator``.
+      - "git+https://github.com/czymh/csstemu"
       # The halo-model code that supplies the variance convention, the
       # cosmology dataclass and the emulator's numpy-2 compatibility shim.
       - "git+https://github.com/JohanComparat/ggah_mod"

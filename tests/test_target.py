@@ -4,6 +4,9 @@ The module-level import guard is deliberately absent: only the classes that
 genuinely need the CSST emulator or the halo-model code skip without them, so
 that everything testable in a plain install keeps being tested.
 """
+import sys
+import types
+
 import numpy as np
 import pytest
 
@@ -347,3 +350,74 @@ class TestTheCosmologyHandover:
             with pytest.raises(ValueError, match="outside the CSST"):
                 fn(bad, 0.0, np.array([1e13]), emu=emu)
         assert emu.calls == [], "it reached the emulator with a refused cosmology"
+
+
+class TestTheEmulatorIsBuiltInTheRightOrder:
+    """``_emulator`` is an ordering contract, and the order is the point.
+
+    ``ggah_mod``'s shim probes for CSSTemu's numpy-2 failure by *calling* the
+    method that fails, so it only reaches that failure once a cosmology has
+    been set.  Applied first it would be looking at an emulator that has not
+    been asked for anything yet, find nothing wrong, and patch nothing --- and
+    the mass function would raise on the first real call instead.
+
+    Both sides are stubbed, because having CSSTemu and the halo-model code
+    installed *together* is exactly what an ordinary environment does not, and
+    the order is worth asserting somewhere rather than nowhere.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _needs_the_halo_code(self):
+        pytest.importorskip("ggah_mod.cosmology")
+
+    @pytest.fixture
+    def stubbed(self, monkeypatch):
+        order, made = [], []
+
+        class _Emu(_RecordingEmulator):
+            def set_cosmos(self, **kw):
+                order.append("cosmology")
+                return super().set_cosmos(**kw)
+
+        def _construct():
+            order.append("constructed")
+            made.append(_Emu())
+            return made[-1]
+
+        def _shim(emu):
+            order.append("shim")
+            return emu
+
+        cemulator = types.ModuleType("CEmulator")
+        emulator = types.ModuleType("CEmulator.Emulator")
+        emulator.HMF_CEmulator = _construct
+        cemulator.Emulator = emulator
+        compat = types.ModuleType("ggah_mod.halos._cemulator_compat")
+        compat.ensure_cemulator_works = _shim
+        monkeypatch.setitem(sys.modules, "CEmulator", cemulator)
+        monkeypatch.setitem(sys.modules, "CEmulator.Emulator", emulator)
+        monkeypatch.setitem(sys.modules, "ggah_mod.halos._cemulator_compat", compat)
+        return order, made
+
+    def test_the_shim_comes_after_a_cosmology_not_before(self, stubbed):
+        order, _ = stubbed
+        target._emulator()
+        assert order == ["constructed", "cosmology", "shim"], (
+            "the shim probes by calling the failing method, so a cosmology has "
+            "to be set before there is anything for it to see")
+
+    def test_without_a_cosmology_it_uses_the_fiducial(self, stubbed):
+        _, made = stubbed
+        target._emulator()
+        assert made[0].cosmos[-1]["H0"] == pytest.approx(67.36, rel=1e-12)
+
+    def test_a_requested_cosmology_is_set_again_after_the_shim(self, stubbed):
+        """The shim is free to leave the emulator holding whatever cosmology it
+        probed with, so the caller's is re-applied last and is what survives."""
+        order, made = stubbed
+        theta = target.FIDUCIAL.copy()
+        theta[box.PARAMS.index("H0")] = 70.0
+        emu = target._emulator(theta)
+        assert order == ["constructed", "cosmology", "shim", "cosmology"]
+        assert emu is made[0]
+        assert [c["H0"] for c in emu.cosmos] == pytest.approx([70.0, 70.0])

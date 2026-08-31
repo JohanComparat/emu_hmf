@@ -1,11 +1,11 @@
 r"""The hypercube the recalibration lives in, taken from CSST rather than chosen.
 
-The target of this package is the CSST ``CEmulator`` mass function, so the box
+The target of this package is the CSSTemu mass function, so the box
 is *its* box.  Copying the numbers here rather than importing them is
-deliberate and is checked: ``CEmulator`` belongs to the ``[gen]`` install, and a
+deliberate and is checked: CSSTemu belongs to the ``[gen]`` install, and a
 package whose whole point is to be importable by a forecast cannot make the
 forecast depend on a Gaussian-process emulator to find out what its own bounds
-are.  ``tests/test_box.py`` asserts these against ``CEmulator``'s own
+are.  ``tests/test_box.py`` asserts these against CSSTemu's own
 ``param_limits``, so the copy cannot drift without a test failing.
 
 **Narrower than** :mod:`emu_pk`'s **in three axes**, which matters because the
@@ -22,11 +22,11 @@ import numpy as np
 
 __all__ = ["PARAMS", "BOX", "sample", "check", "inside"]
 
-#: Column order.  ``CEmulator``'s own names, so a design matrix built here can
+#: Column order.  CSSTemu's own names, so a design matrix built here can
 #: be handed to it without a mapping that could be got wrong in one place.
 PARAMS = ("Omegab", "Omegam", "H0", "ns", "A", "w", "wa", "mnu")
 
-#: Closed bounds, inclusive, exactly as ``CEmulator`` states them.
+#: Closed bounds, inclusive, exactly as CSSTemu states them.
 BOX = {
     "Omegab": (0.04, 0.06),
     "Omegam": (0.24, 0.40),
@@ -50,10 +50,9 @@ def _lhs(n: int, d: int, rng: np.random.Generator) -> np.ndarray:
 def sample(n: int, seed: int = 20260828) -> np.ndarray:
     """``(n, 8)`` design in :data:`PARAMS` order.
 
-    Deterministic in ``seed``, for the reason :mod:`emu_pk.box` gives: a design
-    reproducible from a seed alone means a shard can be regenerated later
-    without shipping the matrix, and two shards can never disagree about which
-    index means which cosmology.
+    Deterministic in ``seed``: a design reproducible from a seed alone means a
+    shard can be regenerated later without shipping the matrix, and two shards
+    can never disagree about which index means which cosmology.
 
     Unlike :mod:`emu_pk` there is no ``w0 + wa < 0`` rejection here.  CSST's box
     already excludes the corner where dark energy dominates early --- its

@@ -30,7 +30,7 @@ only the released package and matplotlib.  Run it yourself:
    :align: center
 
 At :math:`z = 0` the 200m correction is a couple of per cent and the virial one
-is thirteen; by :math:`z = 1` they have converged and both are rising.  The
+is fourteen; by :math:`z = 1` they have converged and both are rising.  The
 shaded strip is the part of the nominal :math:`\nu` band that the training set
 does not reach at that redshift --- see :doc:`validity`.
 
@@ -77,8 +77,16 @@ correction takes :math:`\theta` at all.
    :align: center
 
 Left: the ratio at seven redshifts.  Right: its size, as the rms of
-:math:`\ln` ratio over the band covered at each :math:`z`.  Both definitions
-grow by roughly a factor of five between :math:`z = 0` and :math:`z = 3`.
+:math:`\ln` ratio over the band covered at each :math:`z`.
+
+The two definitions do not behave alike here, and the difference is the
+boundary rather than the fit.  At 200m the correction grows monotonically, 2.3
+per cent at :math:`z = 0` to 11.6 at :math:`z = 3` --- a factor of five.  At
+virial it is **U-shaped**: 16 per cent at :math:`z = 0`, down to about 3 near
+:math:`z = 0.7`, and back to 16 by :math:`z = 3`.  The dip is where
+:math:`\Delta_{\rm vir}(z)` crosses :math:`\Delta_{\rm m} = 200` and the
+change of boundary momentarily costs nothing, leaving only the recalibration.
+See :doc:`massdefs`.
 
 5. The mass function itself
 ---------------------------

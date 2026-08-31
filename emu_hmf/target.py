@@ -2,7 +2,7 @@ r"""What is being fitted: the CSST mass function, in *this* variance convention.
 
 Two halves, and keeping them apart is the point.
 
-**The target** is ``CEmulator``'s emulated :math:`\dd n/\dd\ln M` --- a Gaussian
+**The target** is CSSTemu's emulated :math:`\dd n/\dd\ln M` --- a Gaussian
 process trained on the CSST suite, so it carries the simulations' calibration
 rather than a fit to them.  It is numpy and not differentiable, which is fine:
 it is the training target, evaluated offline, exactly as CLASS is for
@@ -13,16 +13,14 @@ it is the training target, evaluated offline, exactly as CLASS is for
 :math:`\bar\rho_{cb}` --- because that is the :math:`\sigma(M)` the recalibrated
 fit will be evaluated with.  Fitting :math:`f(\sigma)` against one variance and
 using it with another is the mismatch that makes a multiplicity function look
-wrong when the convention around it is what moved, and this package exists
-partly because that mismatch is easy to make.
+wrong when the convention around it is what moved.
 
 Which mass definition
 ---------------------
 
-``CEmulator`` offers ``RockstarM200m``, ``FoFM200c`` and ``RockstarMvir``, and
+CSSTemu offers ``RockstarM200m``, ``FoFM200c`` and ``RockstarMvir``, and
 its wrapper in ``ggah_mod`` already records that these are genuinely different
-masses rather than conventions.  The feedback that prompted this package asks
-for :math:`200{\rm c}` --- but the only :math:`200{\rm c}` on offer is a
+masses rather than conventions.  The only :math:`200{\rm c}` on offer is a
 *friends-of-friends* mass, and pairing a FoF mass with a spherical-overdensity
 multiplicity function is the category error ``ggah_mod.halos.calibration``
 refuses one rung down.
@@ -168,7 +166,7 @@ def to_ggah_cosmology(theta):
 
     CSST's ``Omegam`` --- the symbol ``param_limits`` bounds --- is the **cold**
     density, :math:`\Omega_b + \Omega_{cdm}`, with the massive neutrinos
-    excluded; ``CEmulator`` carries the total separately as ``Cosmo.OmegaM``.
+    excluded; CSSTemu carries the total separately as ``Cosmo.OmegaM``.
     ``ggah_mod``'s :attr:`Omega_m` is the total.  So the two agree on
     :attr:`Omega_cb`, not on :attr:`Omega_m`, and the neutrino density has to be
     added on the way in.
@@ -226,7 +224,7 @@ def theta_from_cosmology(cosmo):
 
 
 def set_cosmology(emu, theta):
-    r"""Hand ``CEmulator`` a cosmology, in the dialect ``set_cosmos`` speaks.
+    r"""Hand CSSTemu a cosmology, in the dialect ``set_cosmos`` speaks.
 
     Not the one ``param_limits`` speaks, which is the trap: the bounds are
     stated in :math:`\Omega_m` and :math:`10^{9}A_s`, and the setter wants the
@@ -266,7 +264,7 @@ def csst_dndlnM(theta, z, m, massdef: str = DEFAULT_MASSDEF, emu=None):
 
 
 def csst_tinker08(theta, z, m, delta_mean=200.0, emu=None):
-    r"""``CEmulator``'s *own* Tinker08, at an explicit :math:`\Delta_{\rm m}`.
+    r"""CSSTemu's *own* Tinker08, at an explicit :math:`\Delta_{\rm m}`.
 
     Against the cold spectrum, which is this package's convention too.  It is
     here because the emulator shipping both its simulation-calibrated answer and
@@ -283,7 +281,7 @@ def csst_tinker08(theta, z, m, delta_mean=200.0, emu=None):
 def _emulator(theta=None):
     """``HMF_CEmulator``, with a cosmology set and ``ggah_mod``'s shim applied.
 
-    The shim is not optional and not a version check.  Two of CEmulator's
+    The shim is not optional and not a version check.  Two of CSSTemu's
     methods assign a size-1 array into a scalar slot, which numpy 2 refuses, so
     the mass function raises before returning anything.  ``ggah_mod`` carries
     the patch already --- *probed* by calling the method and catching the error,

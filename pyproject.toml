@@ -7,7 +7,7 @@ name = "emu_hmf"
 version = "1.0.0"
 description = "A differentiable, cosmology-dependent recalibration of the Tinker08 halo multiplicity function"
 readme = "README.md"
-license = "MIT"
+license = "BSD-3-Clause"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [{name = "Johan Comparat", email = "johan.comparat@pm.me"}]
@@ -66,6 +66,6 @@ include = ["emu_hmf*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-    "gen: needs the training-set stack (CEmulator, CLASS, ggah_mod)",
+    "gen: needs the training-set stack (CSSTemu, CLASS, ggah_mod)",
     "slow: builds a wheel or trains a network",
 ]

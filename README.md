@@ -2,7 +2,7 @@
 
 A differentiable, cosmology-dependent recalibration of the Tinker et al. (2008)
 halo multiplicity function, trained against the CSST emulator
-([Chen & Yu 2025](https://github.com/czymh/CEmulator)) over the box that
+([Chen & Yu 2025](https://github.com/czymh/csstemu)) over the box that
 emulator was built on.
 
 Tinker08 is a fit to simulations — and not to the simulations anyone compares
@@ -37,6 +37,22 @@ solver, no Gaussian-process emulator, no training stack, no conda environment �
 a forecast that wants to *evaluate* a mass function should not have to install
 the machinery that fitted one. `tests/test_public_api.py` asserts that split
 rather than trusting it.
+
+### A dedicated environment
+
+If you want one anyway — for a reproducible box rather than because the package
+needs it — [`environment.yml`](environment.yml) is the minimal one:
+
+```bash
+mamba env create -f environment.yml     # or: conda env create -f environment.yml
+mamba activate emu_hmf
+pip install -e .
+```
+
+It pins the **CPU** build of `jaxlib`: 64 MB against 199 MB for the CUDA one,
+and left unpinned the build depends on whether the machine that solved the
+environment happened to have a driver. The file says how to swap it for a GPU,
+and carries commented blocks for the `[dev]`, `[train]` and `[docs]` extras.
 
 ## Use
 
@@ -135,4 +151,4 @@ this package for the recalibration. See `CITATION.cff`.
 
 ## Licence
 
-MIT. See [LICENSE](LICENSE).
+BSD 3-Clause. See [LICENSE](LICENSE).

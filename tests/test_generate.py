@@ -195,8 +195,8 @@ class TestTheShardWriter:
 
     def test_an_existing_shard_is_not_recomputed(self, tmp_path, stub_solve,
                                                  capsys):
-        """A besteffort kill that loses an hour of completed solves is a lesson
-        one pays for once."""
+        """A shard already on disk is left alone and its solves are not
+        repeated, so an interrupted campaign resumes at the last chunk."""
         out = tmp_path / "hmf_000.npz"
         out.write_bytes(b"not really an npz")
         generate.shard(0, 4, out, n_total=8)

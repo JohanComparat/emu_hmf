@@ -76,8 +76,8 @@ it was fitted in and the package cannot tell.
 The correction is not small at every redshift
 ---------------------------------------------
 
-A few per cent at :math:`z = 0` is the number that prompted this package.  It is
-not the number that describes it.
+A few per cent at :math:`z = 0` is the correction at the one redshift most
+often quoted.  It is not the number that describes the correction as a whole.
 
 .. figure:: _static/figures/growth_with_redshift.png
    :width: 100%
@@ -85,7 +85,7 @@ not the number that describes it.
    :alt: the correction grows with redshift
 
    Measured on the shipped 200m weights: the rms of :math:`\ln R` over the
-   fitted band runs 2.4, 5.7, 9.5 and 11.7 per cent at
+   fitted band runs 2.3, 5.6, 9.4 and 11.6 per cent at
    :math:`z = 0, 1, 2, 3`.
 
 Quoting the low-redshift figure alone would understate the correction

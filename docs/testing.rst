@@ -11,10 +11,11 @@ creates.  Tests that genuinely need the CSST emulator, CLASS or a halo-model
 code skip rather than fail, so a full run in a plain install reports skips and
 no failures.
 
-Coverage, with the halo-model code available: ``box``, ``model``, ``generate``
-and ``fit`` at 100 %, ``target`` at 68 % --- the remainder being the two
-functions that cannot run without a Gaussian-process emulator and a Boltzmann
-solver behind them.
+Coverage, with the halo-model code available: **100 %**, every module.  In the
+environment ``pip install emu_hmf`` creates it is 86 %, and the difference is
+entirely the tests that skip there --- the ones that need a Gaussian-process
+emulator or a Boltzmann solver to say anything.  Nothing is uncovered because
+nobody wrote a test for it.
 
 Test modules
 ------------

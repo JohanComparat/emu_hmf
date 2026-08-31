@@ -5,12 +5,13 @@ type: software
 authors:
   - family-names: Comparat
     given-names: Johan
-    email: johan.comparat@pm.me
+    email: jcomparat@lpsc.in2p3.fr
+    orcid: "https://orcid.org/0000-0001-9200-1497"
 repository-code: "https://github.com/JohanComparat/emu_hmf"
 url: "https://emu-hmf.readthedocs.io"
-license: MIT
+license: BSD-3-Clause
 version: 1.0.0
-date-released: 2026-08-29
+date-released: "2026-08-31"
 keywords:
   - cosmology
   - halo mass function
@@ -42,12 +43,30 @@ references:
     start: 709
     year: 2008
     doi: 10.1086/591439
+  - type: article
+    title: >-
+      CSST cosmological emulator II: Generalized accurate halo mass function
+      emulation
+    authors:
+      - family-names: Chen
+        given-names: Zhao
+      - family-names: Yu
+        given-names: Yu
+    journal: "Science China Physics, Mechanics, and Astronomy"
+    volume: 68
+    issue: 10
+    start: 109513
+    year: 2025
+    doi: 10.1007/s11433-025-2764-x
+    url: "https://ui.adsabs.harvard.edu/abs/2025SCPMA..6809513C/abstract"
+    notes: >-
+      The halo mass function emulation this package recalibrates against.
   - type: software
-    title: "CEmulator: emulators for the CSST simulation suite"
+    title: "CSSTemu: emulators for the CSST simulation suite"
     authors:
       - family-names: Chen
         given-names: Zhao
       - family-names: Yu
         given-names: Yu
     year: 2025
-    repository-code: "https://github.com/czymh/CEmulator"
+    repository-code: "https://github.com/czymh/csstemu"

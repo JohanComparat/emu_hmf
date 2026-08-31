@@ -24,9 +24,9 @@ but a slab.  CLASS has no box.  Generation is offline and one-off, so paying
 3.6 s a cosmology to remove an avoidable approximation from the training data is
 the easy side of that trade.
 
-Shards write every ``CHUNK`` cosmologies and skip what is already on disk, for
-the reason :mod:`emu_pk.generate` gives: a besteffort kill that loses an hour of
-completed solves is a lesson one pays for once.
+Shards write every ``CHUNK`` cosmologies and skip what is already on disk, so
+an interrupted campaign resumes at the last chunk and a kill costs minutes of
+recomputation rather than hours.
 """
 
 from __future__ import annotations

@@ -8,7 +8,7 @@ dependence beyond :math:`\sigma(M)` and :math:`z` cannot express.
 What this package learns is therefore not a mass function.  It is a correction
 to Tinker08's four shape parameters :math:`(A, a, b, c)`, as a function of the
 eight cosmological parameters and redshift, trained against the CSST emulator
-\-- ``CEmulator``, Chen & Yu (2025) -- over the box that emulator was built on.
+\-- CSSTemu, Chen & Yu (2025) -- over the box that emulator was built on.
 Keeping Tinker08 as the carrier is the whole design:
 
 * at zero correction the answer *is* Tinker08, exactly, so the baseline is a

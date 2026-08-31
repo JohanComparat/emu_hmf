@@ -8,25 +8,25 @@ from emu_hmf import box
 class TestTheBoxIsTheEmulatorsOwn:
     """Copied rather than imported, and therefore checked.
 
-    ``CEmulator`` is a ``[gen]`` dependency: a package meant to be importable
+    CSSTemu is a ``[gen]`` dependency: a package meant to be importable
     by a forecast cannot make the forecast install a Gaussian-process emulator
     to find out what its own bounds are.  So the numbers are written down here
     -- and this test is the reason that is safe.
     """
 
-    def test_it_matches_CEmulator_exactly(self):
+    def test_it_matches_csstemu_exactly(self):
         CE = pytest.importorskip("CEmulator.Emulator",
-                                 reason="CEmulator is a [gen] dependency")
+                                 reason="CSSTemu is a [gen] dependency")
         theirs = CE.HMF_CEmulator().param_limits
         assert set(theirs) == set(box.BOX), (
-            f"CEmulator's parameters are {sorted(theirs)}, ours {sorted(box.BOX)}")
+            f"CSSTemu's parameters are {sorted(theirs)}, ours {sorted(box.BOX)}")
         for p, (lo, hi) in box.BOX.items():
             assert (lo, hi) == tuple(theirs[p]), (
-                f"{p}: ours {(lo, hi)}, CEmulator's {tuple(theirs[p])}")
+                f"{p}: ours {(lo, hi)}, CSSTemu's {tuple(theirs[p])}")
 
     def test_the_column_order_is_theirs_too(self):
         CE = pytest.importorskip("CEmulator.Emulator",
-                                 reason="CEmulator is a [gen] dependency")
+                                 reason="CSSTemu is a [gen] dependency")
         assert list(box.PARAMS) == list(CE.HMF_CEmulator().param_names)
 
 

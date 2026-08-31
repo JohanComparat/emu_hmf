@@ -1,0 +1,46 @@
+# Minimal conda/mamba environment for emu_hmf.
+#
+#   mamba env create -f environment.yml     # or: conda env create -f environment.yml
+#   mamba activate emu_hmf
+#   pip install -e .
+#
+# Two dependencies and 90 kB of trained weights. A forecast that wants to
+# *evaluate* a mass function should not have to install the machinery that
+# fitted one, so the training stack and the docs toolchain are commented out
+# below. `tests/test_public_api.py` asserts that split rather than trusting it.
+name: emu_hmf
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  # 3.10 is the floor in pyproject.toml; the upper bound is where the
+  # classifiers stop (3.10-3.13) rather than a known incompatibility.
+  - python >=3.10,<3.14
+  - pip
+
+  # --- the whole runtime -----------------------------------------------------
+  - numpy >=1.24
+  # jax pulls jaxlib itself, but not which *build* of it: conda-forge ships
+  # CPU and CUDA builds, and left free the answer depends on whether the
+  # machine that solved the environment had a CUDA driver. The CPU build is
+  # pinned here because it is the minimal one -- 64 MB against 199 MB. For a
+  # GPU, swap the pin for `- jaxlib=*=*cuda*`.
+  - jax >=0.4.20
+  - jaxlib=*=cpu*
+
+  # --- optional: uncomment the block you need --------------------------------
+  #
+  # [dev] run the test suite
+  # - pytest >=7
+  # - pytest-cov
+  # - optax >=0.1.7
+  # - python-build
+  #
+  # [train] refit the correction
+  # - optax >=0.1.7
+  #
+  # [docs] build the documentation
+  # - sphinx
+  # - sphinx_rtd_theme
+  # - myst-parser
+  # - matplotlib

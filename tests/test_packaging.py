@@ -6,7 +6,7 @@ installs the code and none of its data, ``HmfCorrection()`` raises
 every other test in this suite reads the weights straight out of the working
 tree.  So the build is run and the archives are opened.
 """
-import importlib.util
+import os
 import pathlib
 import subprocess
 import sys
@@ -22,14 +22,32 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 pytestmark = pytest.mark.slow
 
 
+def _python(args, cwd):
+    """Run the interpreter with the repository root kept off ``sys.path``.
+
+    ``setuptools`` writes its scratch tree to ``ROOT/build``, and that
+    directory is importable as a namespace package named ``build`` which
+    shadows the installed build frontend.  The child runs from ``cwd`` --
+    anywhere but the root -- with the root filtered out of ``PYTHONPATH``, so
+    ``-m build`` resolves to the frontend wherever the suite is run from.
+    """
+    env = dict(os.environ)
+    kept = [p for p in env.get("PYTHONPATH", "").split(os.pathsep)
+            if p and pathlib.Path(p).expanduser().resolve() != ROOT]
+    if kept:
+        env["PYTHONPATH"] = os.pathsep.join(kept)
+    else:
+        env.pop("PYTHONPATH", None)
+    return subprocess.run([sys.executable, *args], cwd=str(cwd), env=env,
+                          capture_output=True, text=True)
+
+
 @pytest.fixture(scope="module")
 def built(tmp_path_factory):
-    if importlib.util.find_spec("build.__main__") is None:
-        pytest.skip("`python -m build` is a [dev] extra and is not installed")
     out = tmp_path_factory.mktemp("dist")
-    r = subprocess.run(
-        [sys.executable, "-m", "build", "--outdir", str(out), str(ROOT)],
-        capture_output=True, text=True)
+    if _python(["-c", "import build.__main__"], out).returncode:
+        pytest.skip("`python -m build` is a [dev] extra and is not installed")
+    r = _python(["-m", "build", "--outdir", str(out), str(ROOT)], out)
     if r.returncode:
         pytest.fail(f"build failed:\n{r.stdout[-3000:]}\n{r.stderr[-3000:]}")
     wheels = list(out.glob("*.whl"))
@@ -59,7 +77,7 @@ class TestTheWheelCarriesTheWeights:
         with zipfile.ZipFile(wheel) as z:
             meta = next(n for n in z.namelist() if n.endswith("METADATA"))
             text = z.read(meta).decode()
-        assert "MIT" in text
+        assert "BSD-3-Clause" in text
         assert "License-File: LICENSE" in text
 
 
@@ -89,8 +107,6 @@ class TestAFreshInstallWorks:
             capture_output=True, text=True)
         if r.returncode:
             pytest.skip(f"pip could not install into a target dir: {r.stderr}")
-        import os
-
         env = dict(os.environ, PYTHONPATH=str(target_dir))
         env.pop("JAX_PLATFORMS", None)
         r = subprocess.run(

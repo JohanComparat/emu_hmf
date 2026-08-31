@@ -1,8 +1,9 @@
 r"""Inference: Tinker08 with cosmology-dependent parameters, in pure JAX.
 
 Importable with numpy and jax alone.  Nothing here needs ``CEmulator``,
-``classy``, ``ggah_mod`` or ``optax`` --- those built the thing, and a forecast
-that only wants to *evaluate* it should not install them.
+``classy``, ``ggah_mod`` or ``optax`` --- those belong to the offline half that
+trains the weights, and a forecast that only wants to *evaluate* them should not
+install them.
 
 The form is unchanged
 -----------------------

@@ -15,3 +15,4 @@ First public release.
   spans, which narrows with redshift as growth pushes σ down.
 * Both weight files are float64 and carry their own provenance — mass
   definition, sample size, held-out split and residual.
+* Released under the BSD 3-Clause licence.
