@@ -10,7 +10,7 @@ readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
-authors = [{name = "Johan Comparat", email = "johan.comparat@pm.me"}]
+authors = [{name = "Johan Comparat", email = "jcomparat@lpsc.in2p3.fr"}]
 keywords = [
     "cosmology", "halo mass function", "large-scale structure",
     "emulator", "jax", "automatic differentiation", "Tinker08",
