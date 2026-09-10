@@ -8,7 +8,7 @@ it — but calling them is not.
 * :data:`~emu_hmf.target.FIDUCIAL` — a Planck-like point in the middle of the
   box; the cosmology every worked example and quoted number here uses.
 * :data:`~emu_hmf.target.MASSDEFS`, :data:`~emu_hmf.target.DEFAULT_MASSDEF` —
-  the three halo definitions the emulator offers, and what each one *is*.
+  the three halo definitions the emulator offers, and what each one is.
 * :data:`~emu_hmf.target.M_TRUSTED`, :data:`~emu_hmf.target.NU_TRUSTED`,
   :data:`~emu_hmf.target.DELTA_C` — the fitted domain.
 * :data:`~emu_hmf.target.NU_COVERED`, :func:`~emu_hmf.target.nu_covered` — what

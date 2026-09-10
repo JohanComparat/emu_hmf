@@ -5,29 +5,26 @@ A differentiable, cosmology-dependent recalibration of the Tinker et al. (2008)
 halo multiplicity function, trained against the CSST emulator over the box that
 emulator was built on.
 
-Tinker08 is a fit to simulations, and not to the simulations anyone compares
-against now: at a Planck cosmology it is offset by a few per cent at
-:math:`z = 0`, and the size of that offset is itself a function of cosmology and
-redshift, which a fit whose only inputs are :math:`\sigma(M)` and :math:`z`
-cannot express.  This package learns that offset --- as a correction to
-Tinker08's own four shape parameters, so that at zero correction the answer *is*
-Tinker08, exactly.
+At a Planck cosmology Tinker08 is offset from the CSST suite by a few per cent
+at :math:`z = 0`, and the offset varies with cosmology and redshift.  A fit
+whose only inputs are :math:`\sigma(M)` and :math:`z` cannot express that
+variation.  We fit a correction to Tinker08's own four shape parameters, which
+returns Tinker08 exactly at zero correction.
 
 .. code-block:: bash
 
    pip install emu_hmf
 
-Two dependencies, numpy and JAX.  ``jax.grad``, ``jax.jit`` and ``jax.vmap`` all
-pass through the cosmology, which is the reason this is a package and not a
-table of numbers.
+The inference path needs numpy and JAX.  ``jax.grad``, ``jax.jit`` and
+``jax.vmap`` all pass through the cosmology.
 
 .. figure:: _static/figures/correction_vs_nu.png
    :width: 100%
    :align: center
    :alt: the correction relative to Tinker08, at two halo definitions
 
-   What the two shipped corrections do to Tinker08, at the Planck-like
-   fiducial.  See :doc:`massdefs` for why there are two and not one.
+   The two shipped corrections relative to Tinker08, at the Planck-like
+   fiducial.  See :doc:`massdefs` for the two halo definitions.
 
 .. toctree::
    :maxdepth: 2

@@ -1,8 +1,9 @@
 Tutorial
 ========
 
-Every figure on this page is produced by ``docs/make_figures.py``, which needs
-only the released package and matplotlib.  Run it yourself:
+``docs/make_figures.py`` produces every figure on this page from the released
+package and matplotlib.  One figure also needs a cached CLASS table; the note in
+section 5 says so.
 
 .. code-block:: bash
 
@@ -107,12 +108,12 @@ See :doc:`massdefs`.
    in.  The package itself has no power spectrum, and in use you supply your
    own --- see :doc:`concepts`.
 
-   The faint continuations are outside the fitted :math:`\nu` band at that
-   redshift.  At :math:`z = 2` a :math:`10^{14}\,M_\odot/h` halo is
-   :math:`\nu = 4.3`, well past it.
+   The faint continuations lie outside the fitted :math:`\nu` band at that
+   redshift.  At :math:`z = 2` a :math:`10^{14}\,M_\odot/h` halo sits at
+   :math:`\nu = 4.3`.
 
-6. Derivatives, which is the point
-----------------------------------
+6. Derivatives
+--------------
 
 .. code-block:: python
 
@@ -129,9 +130,8 @@ See :doc:`massdefs`.
    :align: center
 
 :math:`\partial \ln f / \partial \theta_i`, scaled by each parameter's box
-width so the eight are comparable.  A flat line here would be a parameter the
-mass function cannot constrain --- and a table lookup would give flat lines for
-all eight.
+width so the eight are comparable.  A flat line marks a parameter the mass
+function cannot constrain.
 
 7. How accurate is it
 ---------------------
@@ -146,6 +146,6 @@ all eight.
    :width: 75%
    :align: center
 
-Read out of the weight files themselves, so the figure cannot drift from the
-weights it describes.  The held-out set is 200 whole **cosmologies**, not
-held-out rows: see :doc:`testing`.
+Both figures are read out of the weight files, so they cannot drift from the
+weights they describe.  The held-out set is 200 complete cosmologies rather than
+a sample of rows; see :doc:`testing`.

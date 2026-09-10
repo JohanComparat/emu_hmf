@@ -4,7 +4,7 @@
 #   mamba activate emu_hmf
 #   pip install -e .
 #
-# Two dependencies and 90 kB of trained weights. A forecast that wants to
+# Two dependencies and 94 kB of trained weights. A forecast that wants to
 # *evaluate* a mass function should not have to install the machinery that
 # fitted one, so the training stack and the docs toolchain are commented out
 # below. `tests/test_public_api.py` asserts that split rather than trusting it.

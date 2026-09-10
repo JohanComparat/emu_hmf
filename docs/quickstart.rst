@@ -11,7 +11,7 @@ The multiplicity function
    import numpy as np
    from emu_hmf.model import HmfCorrection
 
-   corr = HmfCorrection()          # the 200m weights, which is the default
+   corr = HmfCorrection()          # the 200m weights, the default
 
    theta = np.array([0.049, 0.31, 67.36, 0.9649, 2.1, -1.0, 0.0, 0.06])
    #                 Omega_b, Omega_cb, H0, n_s, 1e9 A_s, w, w_a, sum m_nu
@@ -26,8 +26,8 @@ The multiplicity function
 * the amplitude is :math:`10^9 A_s`, not :math:`A_s` and not
   :math:`\ln(10^{10}A_s)`.
 
-Getting either wrong produces a plausible number rather than an error, which is
-why :data:`emu_hmf.target.FIDUCIAL` exists to copy from.
+Either mistake produces a plausible number rather than an error.
+:data:`emu_hmf.target.FIDUCIAL` holds a correct point to copy from.
 
 The abundance
 -------------
@@ -43,17 +43,14 @@ which is
    \frac{\dd n}{\dd\ln M} = f(\sigma)\,\frac{\bar\rho_{cb}}{M}\,
        \left|\frac{\dd\ln\sigma}{\dd\ln M}\right| .
 
-:math:`\sigma(M)` is passed in and not computed.  This package has no power
-spectrum and should not acquire one --- but the variance it is handed has to be
-the one it was fitted against: the **cold** field against
-:math:`\bar\rho_{cb}`.  Fitting :math:`f(\sigma)` against one variance and
-evaluating it with another is the mismatch that makes a multiplicity function
-look wrong when the convention around it is what moved.  See :doc:`concepts`.
+The caller supplies :math:`\sigma(M)`; this package computes no power
+spectrum.  The variance must be the one the fit was made against, the cold
+field against :math:`\bar\rho_{cb}`.  See :doc:`concepts`.
 
 Gradients
 ---------
 
-Everything is JAX, all the way through the cosmology:
+The forward pass is JAX throughout, including the cosmology:
 
 .. code-block:: python
 
@@ -64,17 +61,16 @@ Everything is JAX, all the way through the cosmology:
 
    g = jax.grad(ln_f)(jnp.asarray(theta))       # (8,), one per parameter
 
-``jax.jit`` and ``jax.vmap`` work too --- the latter is how a chain of
-cosmologies is evaluated:
+``jax.jit`` and ``jax.vmap`` also work; ``vmap`` evaluates a chain of
+cosmologies:
 
 .. code-block:: python
 
    f = jax.jit(lambda t: corr.fsigma(0.8, t, 0.5))
    values = jax.vmap(f)(chain)                  # chain is (n, 8)
 
-Inside a ``jit`` the box check is skipped, because the values are not available
-under tracing and raising there would break the gradient the package exists to
-provide.  A jitted forward model is checked once, when it is built.
+Inside a ``jit`` the box check is skipped: the values are not concrete under
+tracing.  A jitted forward model is checked once, when it is built.
 
 The virial weights
 ------------------
@@ -85,18 +81,17 @@ The virial weights
 
    vir = HmfCorrection(WEIGHTS["vir"])
 
-These are **not** a per-cent correction: they carry the change of halo boundary
-as well as the recalibration.  :doc:`massdefs` says what that means and why the
-two are separate files.
+These carry the change of halo boundary as well as the recalibration, so they
+sit some 14 per cent below the carrier at :math:`z = 0`.  See :doc:`massdefs`.
 
 When it refuses
 ---------------
 
-Three things raise.  A cosmology outside the box, below; a weights file whose
-``params_order`` is not the one :func:`~emu_hmf.model.normalise` builds; and a
-``ggah_mod`` too old for the conversions.  The last two raise at *construction*
-rather than at evaluation, so a forward model that builds cannot fail either
-way later.
+Three things raise.  A cosmology outside the box, below.  A weights file whose
+``params_order`` is not the one :func:`~emu_hmf.model.normalise` builds, which
+raises when the correction is constructed.  And a ``ggah_mod`` too old for the
+conversions, which raises from :func:`~emu_hmf.target.to_ggah_cosmology` when
+one is first requested.
 
 .. code-block:: python
 
@@ -106,7 +101,7 @@ way later.
    no training data: H0 = 55 not in (60.0, 80.0).  The fit is not defined
    there and will not be extrapolated.
 
-Every out-of-bounds parameter is named, not just the first.  See
-:doc:`validity` for the second half of the domain --- the one that is *not*
-checked for you, because it depends on a :math:`\sigma(M)` this package never
-sees.
+The message names every out-of-bounds parameter.  :doc:`validity` covers the
+rest of the domain, including the two bounds that depend on a
+:math:`\sigma(M)` this package never sees and the two axes the box does not
+carry.

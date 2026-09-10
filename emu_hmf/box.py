@@ -1,40 +1,34 @@
-r"""The hypercube the recalibration lives in, taken from CSST rather than chosen.
+r"""The hypercube the recalibration is defined on, taken from CSST rather than chosen.
 
-The target of this package is the CSSTemu mass function, so the box
-is *its* box.  Copying the numbers here rather than importing them is
-deliberate and is checked: CSSTemu belongs to the ``[gen]`` install, and a
-package whose whole point is to be importable by a forecast cannot make the
-forecast depend on a Gaussian-process emulator to find out what its own bounds
-are.  ``tests/test_box.py`` asserts these against CSSTemu's own
-``param_limits``, so the copy cannot drift without a test failing.
+The target of this package is the CSSTemu mass function, so the box is its box.
+The numbers are copied here rather than imported, because a package meant to be
+importable by a forecast cannot require a Gaussian-process emulator to state its
+own bounds.  ``tests/test_box.py`` asserts the copy against CSSTemu's
+``param_limits``.
 
-**How it sits inside** :mod:`emu_pk`'s **box**, which matters because that is
-where the :math:`\sigma(M)` this package is evaluated with comes from.  The two
-are stated in different variables, so the comparison is made by mapping this box
-into that one; ``tests/test_box.py`` does it rather than trusting the sentence.
+**How it sits inside** :mod:`emu_pk`'s **box**, which is where the
+:math:`\sigma(M)` this package is evaluated with comes from.  The two are stated
+in different variables, so ``tests/test_box.py`` makes the comparison by mapping
+this box into that one.
 
 On seven of the eight axes they share, this box is the narrower one and sits
 wholly inside: :mod:`emu_pk` reaches :math:`h = 0.55` where CSST starts at
 :math:`H_0 = 60`, and :math:`\Sigma m_\nu = 0.6` where CSST stops at 0.3.
 
-**On the eighth it escapes, and that is the one that costs something.**  CSST
-bounds :math:`\Omega_b` and :math:`H_0` separately, so the physical density
-:math:`\omega_b = \Omega_b h^2` runs from 0.0145 to 0.0382 across it, against
-:mod:`emu_pk`'s 0.0170 to 0.0280 --- outside on *both* sides, and 30 per cent of
-this box's design points sit there.  It is the only axis that excludes any, and
-it is why the training set is generated with CLASS rather than with a network
-spectrum; see :mod:`emu_hmf.generate`.
+On the eighth it escapes.  CSST bounds :math:`\Omega_b` and :math:`H_0`
+separately, so :math:`\omega_b = \Omega_b h^2` runs from 0.0147 to 0.0382 across
+it against :mod:`emu_pk`'s 0.0170 to 0.0280, outside on both sides, and 30 per
+cent of this box's design points sit there.  It is the only axis that excludes
+any, and the reason the training set is generated with CLASS; see
+:mod:`emu_hmf.generate`.
 
-:mod:`emu_pk` 2.0.0 also carries **three axes this box does not have at all**
---- :math:`\Omega_k`, and the two ratios that divide :math:`\Sigma m_\nu` over
-three eigenstates.  They are not a narrowing but an absence: CSST's suite is
-flat and its neutrinos are one species, so there is nothing here to bound.  What
-that costs is measured rather than argued, in
-:data:`emu_hmf.target.OMEGA_K_COST` and
-:data:`~emu_hmf.target.NU_ORDERING_COST`.
+:mod:`emu_pk` 2.0.0 carries three axes this box does not have: :math:`\Omega_k`,
+and the two ratios that divide :math:`\Sigma m_\nu` over three eigenstates.
+CSST's suite is flat and its neutrinos are one species, so there is nothing here
+to bound.  :data:`emu_hmf.target.OMEGA_K_COST` and
+:data:`~emu_hmf.target.NU_ORDERING_COST` measure what that costs.
 
-Outside this box the recalibration is undefined and says so, rather than
-extrapolating a fit whose training data ends.
+Outside this box the recalibration is undefined and refuses.
 """
 
 from __future__ import annotations

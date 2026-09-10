@@ -1,13 +1,13 @@
 emu_hmf.model
 =============
 
-Inference: Tinker08 with cosmology-dependent parameters, in pure JAX.  This is
-the only module a user of the released package needs, and the only one that
-imports nothing beyond numpy and JAX.
+Inference: Tinker08 with cosmology-dependent parameters, in pure JAX.  This
+module imports nothing beyond numpy and JAX, and is the only one a user of the
+released package needs.
 
 * :func:`~emu_hmf.model.tinker08` — the carrier, at
-  :math:`\Delta_{\rm m} = 200`, optionally corrected.  With ``g=None`` it is the
-  published fit, unchanged.
+  :math:`\Delta_{\rm m} = 200`, optionally corrected.  With ``g=None`` it
+  returns the published fit.
 * :class:`~emu_hmf.model.HmfCorrection` — the recalibrated multiplicity
   function.  :meth:`~emu_hmf.model.HmfCorrection.fsigma` gives
   :math:`f(\sigma)`, :meth:`~emu_hmf.model.HmfCorrection.dndlnM` the abundance,

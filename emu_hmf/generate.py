@@ -1,32 +1,24 @@
 r"""Build the training set: the CSST mass function as a multiplicity function.
 
-One row is one :math:`(\theta, z, M)`.  What is stored is not
-:math:`\dd n/\dd\ln M` but
+One row is one :math:`(\theta, z, M)`.  What is stored is
 
 .. math::
 
     f_{\rm target}(\sigma) = \frac{\dd n}{\dd\ln M}\,
         \frac{M}{\bar\rho_{cb}\,|\dd\ln\sigma/\dd\ln M|}
 
---- the emulator's abundance converted into a multiplicity function *in this
-package's variance convention*.  That conversion is the whole design.  Fitting
-:math:`f(\sigma)` against one :math:`\sigma(M)` and evaluating it with another
-is the mismatch that makes a multiplicity function look wrong when the
-convention around it is what moved, and doing the conversion here means the fit
-absorbs it once, at generation, rather than leaving it to every caller.
+the emulator's abundance converted into a multiplicity function in this
+package's variance convention.  Doing the conversion at generation means the
+fit absorbs it once, rather than leaving it to every caller.
 
-**Why CLASS and not** :mod:`emu_pk`.  The variance has to be available
-everywhere the CSST box goes, and :mod:`emu_pk` was trained on
-:math:`\omega_b \in [0.017, 0.028]` while CSST reaches
-:math:`0.0145` to :math:`0.0382` --- so a network spectrum covers only 70 per
-cent of the box being recalibrated, and the missing 30 per cent is not a corner
-but a slab.  CLASS has no box.  Generation is offline and one-off, so paying
-3.6 s a cosmology to remove an avoidable approximation from the training data is
-the easy side of that trade.
+**Why CLASS and not** :mod:`emu_pk`.  The variance must be available everywhere
+the CSST box reaches.  :mod:`emu_pk` is trained on
+:math:`\omega_b \in [0.017, 0.028]` and this box spans 0.0147 to 0.0382, so
+30 per cent of the design falls outside it, above and below.  CLASS carries no
+such bound, and generation is offline.
 
-Shards write every ``CHUNK`` cosmologies and skip what is already on disk, so
-an interrupted campaign resumes at the last chunk and a kill costs minutes of
-recomputation rather than hours.
+Shards write every ``CHUNK`` cosmologies and skip what is already on disk, so an
+interrupted campaign resumes at the last chunk.
 """
 
 from __future__ import annotations
@@ -54,7 +46,7 @@ CHUNK = 25
 #: The wavenumbers sigma(M) is integrated over.  Wider than the masses need,
 #: because the top-hat window has no sharp edge -- see the guard in
 #: ``ggah_mod.halos.variance.check_k_support``, which refuses a grid too narrow
-#: for its mass range and which this grid clears by more than six times.
+#: for its mass range and which this grid clears by 28 times at the small-scale end.
 K_GRID = np.logspace(-4.0, np.log10(200.0), 512)
 
 

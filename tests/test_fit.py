@@ -191,7 +191,20 @@ class TestTheFitStartsAtTinker08:
 
 @pytest.mark.slow
 class TestTheFitEndToEnd:
-    """Recover a correction that was put there on purpose."""
+    """Recover a correction that was put there on purpose.
+
+    Skips without ``optax``, which :func:`emu_hmf.fit.fit` imports directly.
+    ``optax`` is a ``[dev]`` and ``[train]`` entry rather than a runtime one, so
+    a suite run against the runtime dependencies alone would otherwise fail here
+    rather than skip.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _needs_optax(self):
+        pytest.importorskip(
+            "optax",
+            reason="the fit needs optax; the end-to-end recovery of a known "
+                   "correction is NOT being checked -- this skip is not a pass")
 
     @staticmethod
     def _g_true(theta):

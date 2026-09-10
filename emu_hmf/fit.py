@@ -1,19 +1,15 @@
 r"""Fit the four Tinker08 parameters as functions of cosmology and redshift.
 
-What is minimised is the residual in :math:`\ln f`, over the peak-height range
-where the target means something (:data:`emu_hmf.target.NU_TRUSTED`).  In
-:math:`\ln` rather than in :math:`f` because :math:`f` spans four decades over
-that range and a linear loss would fit the low-:math:`\nu` end and ignore the
-clusters.
+We minimise the residual in :math:`\ln f` over the peak-height range where the
+target is trustworthy (:data:`emu_hmf.target.NU_TRUSTED`).  :math:`f` spans four
+decades over that range, so a linear loss would fit the low-:math:`\nu` end and
+ignore the clusters.
 
 The network predicts :math:`g`, a log-correction to each of
-:math:`(A, a, b, c)`, so :math:`g = 0` is Tinker08 unchanged and the fit starts
-there: the output layer is initialised to zero, which means epoch zero is
-exactly the published fit and every step after it is a measured improvement on
-one.  A fit that cannot get worse than its own starting point is a different
-kind of object from one that can.
+:math:`(A, a, b, c)`, and the output layer is initialised to zero.  Epoch zero
+is therefore the published fit, and every step after it is measured against one.
 
-Needs ``optax``; that is the ``[train]`` extra.
+Needs ``optax``, the ``[train]`` extra.
 """
 
 from __future__ import annotations

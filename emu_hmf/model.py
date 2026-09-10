@@ -1,9 +1,7 @@
 r"""Inference: Tinker08 with cosmology-dependent parameters, in pure JAX.
 
-Importable with numpy and jax alone.  Nothing here needs ``CEmulator``,
-``classy``, ``ggah_mod`` or ``optax`` --- those belong to the offline half that
-trains the weights, and a forecast that only wants to *evaluate* them should not
-install them.
+Imports numpy and jax alone.  ``CEmulator``, ``classy``, ``ggah_mod`` and
+``optax`` belong to the offline half that trains the weights.
 
 The form is unchanged
 -----------------------
@@ -15,14 +13,11 @@ The form is unchanged
 
 with the published :math:`\Delta = 200` values and redshift evolution, and each
 of the four multiplied by :math:`e^{g_i(\theta, z)}` where :math:`g` is a small
-network.  Two properties follow from writing it that way rather than fitting
-four free functions:
-
-* :math:`g = 0` recovers Tinker08 **exactly**, so "the correction is zero" is a
-  statement one can make and test rather than a limit one hopes for;
-* the result is still a fit with named parameters, so a reader can ask what the
-  recalibration did to the amplitude as against the tilt, which a black box
-  cannot answer.
+network.  Two properties follow from fitting the four parameters rather than
+four free functions.  At :math:`g = 0` the result is Tinker08 bit for bit, so
+the tests assert equality rather than closeness.  And the fitted quantity keeps
+Tinker08's named parameters, which separates a change in amplitude from a
+change in tilt.
 """
 
 from __future__ import annotations
@@ -65,7 +60,7 @@ WEIGHTS = {
     "200m": _DATA / "emu_hmf_mlp.npz",
     "vir": _DATA / "emu_hmf_mlp_vir.npz",
 }
-#: The 200m correction, which is what ``HmfCorrection()`` builds unasked.
+#: The 200m correction, which ``HmfCorrection()`` builds by default.
 DEFAULT_WEIGHTS = WEIGHTS["200m"]
 
 #: Tinker et al. (2008) Table 2 at :math:`\Delta_{\rm m} = 200`, and the
@@ -73,13 +68,13 @@ DEFAULT_WEIGHTS = WEIGHTS["200m"]
 #: ``ggah_mod`` because this module is the one that must import nothing ---
 #: ``tests/test_model.py`` asserts this against the published table written out
 #: independently, and against the halo-model code's own Tinker08 wherever that
-#: is installed -- which is what makes the restatement safe.
+#: is installed.
 T08 = {"A0": 0.186, "a0": 1.47, "b0": 2.57, "c0": 1.19,
        "Az": -0.14, "az": -0.06}
 
 #: :math:`b`'s exponent is a function of :math:`\Delta`, not a constant:
 #: :math:`\alpha = 10^{-(0.75/\log_{10}(\Delta/75))^{1.2}}`, which is
-#: 0.0106 at :math:`\Delta = 200`.
+#: 0.0107 at :math:`\Delta = 200`.
 T08_ALPHA_200 = float(10.0 ** (-((0.75 / np.log10(200.0 / 75.0)) ** 1.2)))
 
 

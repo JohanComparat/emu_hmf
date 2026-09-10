@@ -6,17 +6,15 @@ What the tests assert
    python -m pytest -q
    python -m pytest -q --cov=emu_hmf --cov-report=term-missing
 
-The suite is written to pass in the environment ``pip install emu_hmf``
-creates.  Tests that genuinely need the CSST emulator, CLASS or a halo-model
-code skip rather than fail, so a full run in a plain install reports skips and
-no failures.
+The suite passes in the environment ``pip install emu_hmf[dev]`` creates.  Tests
+that need the CSST emulator, CLASS or a halo-model code skip rather than fail,
+so a full run in a plain install reports skips and no failures.  Each such skip
+states what stops being checked, because a skipped guard and a passing one read
+alike in a summary line.
 
-Coverage, with the halo-model code available: **100 %**, every module.  In the
-``[dev]`` environment, where the generation stack is absent, it is 87 %, and the
-difference is
-entirely the tests that skip there --- the ones that need a Gaussian-process
-emulator or a Boltzmann solver to say anything.  Nothing is uncovered because
-nobody wrote a test for it.
+Coverage is 100 per cent of every module with the halo-model code available, and
+87 per cent in the ``[dev]`` environment.  The difference is the tests that skip
+there.
 
 Test modules
 ------------
@@ -52,29 +50,30 @@ Test modules
    * - ``test_packaging.py``
      - builds a wheel and opens it.
 
-Three assertions worth naming
-------------------------------
+Four assertions
+---------------
 
-**The split is load-bearing.**  ``test_public_api.py`` builds both corrections
-in a fresh interpreter and fails if ``CEmulator``, ``classy``, ``optax``, scipy
-or the halo-model code has appeared in ``sys.modules``.  The two-dependency
-promise is checked, not merely stated.
+The dependency split.  ``test_public_api.py`` builds both corrections in a fresh
+interpreter and fails if ``CEmulator``, ``classy``, ``optax``, ``emu_pk``,
+``scipy``, ``matplotlib`` or the halo-model code appears in ``sys.modules``.
 
-**A held-out row is not a held-out cosmology.**  Each design contributes several
-hundred rows --- twelve redshifts times the masses inside the peak-height cut
---- and at fixed cosmology :math:`\ln f` is a smooth function of :math:`\sigma`.
-Split at random over rows and the network validates by interpolating between
-neighbouring masses of a design it trained on.  That measures something real,
-but it is not generalisation to a new cosmology, which is the only thing this
-correction is ever asked for.  ``fit`` splits on cosmologies, the weights record
+The validation split is over cosmologies, not rows.  Each design contributes
+several hundred rows, twelve redshifts times the masses inside the peak-height
+cut, and :math:`\ln f` is smooth in :math:`\sigma` at fixed cosmology.  A row
+split therefore validates by interpolating in mass within a design the network
+trained on.  ``fit`` splits on cosmologies, the weights record
 ``split_by_cosmology``, and a test asserts it.
 
-**A wheel without its weights installs and then raises.**  The trained networks
-are package data, and a distribution that shipped the code without them would
-pass every other test in this suite --- because every other test reads them out
-of the working tree.  ``test_packaging.py`` builds the wheel, opens the archive,
-installs it into an empty prefix and evaluates both corrections from a directory
-that is not the repository.
+The wheel carries its weights.  The trained networks are package data, and every
+other test in this suite reads them out of the working tree.
+``test_packaging.py`` builds the wheel, opens the archive, installs it into an
+empty prefix and evaluates both corrections from outside the repository.
+
+The measured constants match their archive.  ``test_target.py`` checks
+:data:`~emu_hmf.target.OMEGA_K_COST` and its companions against
+``docs/data/validity_bounds.npz`` field by field, and checks ``ggah_mod``'s
+restatement of them against this package's copy where that package is
+installed.
 
 Markers
 -------

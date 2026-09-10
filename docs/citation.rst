@@ -1,8 +1,8 @@
 Citation
 ========
 
-If this package is useful, please cite three things: the functional form, the
-simulations it is calibrated against, and the recalibration itself.
+Please cite the functional form, the simulations this package is calibrated
+against, and the recalibration.
 
 **The functional form.**  Tinker, J., Kravtsov, A. V., Klypin, A., et al. 2008,
 *Toward a Halo Mass Function for Precision Cosmology: The Limits of
@@ -13,12 +13,11 @@ https://github.com/czymh/csstemu --- the emulated halo mass function this
 package is recalibrated against, and the box it is defined on.  It installs
 under its own name and imports as ``CEmulator``.
 
-**This package.**  See ``CITATION.cff`` in the repository, which GitHub renders
-as a *Cite this repository* button and which carries the archived DOI for the
-release you used.
+**This package.**  ``CITATION.cff`` in the repository, which GitHub renders as
+a *Cite this repository* button.
 
-The training data is archived separately with its own DOI; cite it as well if
-you refit rather than use the shipped weights.
+The training data is archived separately; cite it as well if you refit rather
+than use the shipped weights.
 
 What to say in a methods section
 --------------------------------

@@ -1,13 +1,14 @@
 Reproducing the training set
 ============================
 
-Two different jobs, with very different costs.
+Refitting the weights and regenerating the shards are separate jobs with very
+different costs.
 
-Refitting the weights: easy
----------------------------
+Refitting the weights
+---------------------
 
-Everything needed to turn the archived training set back into the shipped
-weights is on PyPI:
+Turning the archived training set back into the shipped weights needs only what
+is on PyPI:
 
 .. code-block:: bash
 
@@ -29,16 +30,14 @@ provenance into the output:
      recalibrated       : rms 0.00518 in ln f  (0.52%)
      improvement        : 13.07x
 
-The fit pins ``jax_enable_x64`` itself, so the result does not depend on an
-environment variable set somewhere else.  A network fitted in single precision
-and one fitted in double are two different sets of weights, and the residual
-being quoted is half a per cent.
+The fit pins ``jax_enable_x64`` itself, so the weights do not depend on an
+environment variable set elsewhere.  Single and double precision give different
+weights, against a quoted residual of half a per cent.
 
 The training data
 -----------------
 
-The shards are archived with a DOI --- 11.7 MB for both mass definitions, 16
-files.  One shard holds 250 cosmologies:
+The shards are 11.7 MB for both mass definitions, 16 files.  One shard holds 250 cosmologies:
 
 .. list-table::
    :header-rows: 1
@@ -84,7 +83,7 @@ Regenerating the shards: expensive, and not pip-installable
 ------------------------------------------------------------
 
 This is the half that needs a Boltzmann solver and the CSST emulator.  The
-emulator is not distributed on PyPI, which is why there is no ``[gen]`` extra:
+emulator is not distributed on PyPI, so there is no ``[gen]`` extra:
 an extra that can never resolve is worse than a documented recipe.
 
 .. code-block:: bash
@@ -95,9 +94,8 @@ an extra that can never resolve is worse than a documented recipe.
    python -m emu_hmf.generate --shard 0 --n-per-shard 250 --n-total 2000 \
           --out shards/hmf_000.npz --massdef RockstarM200m
 
-``ggah_mod`` is pinned to a **tag** in that file, and the pin is part of the
-recipe rather than housekeeping.  Two of its conventions decide what a generated
-shard *means*:
+``environment-gen.yml`` pins ``ggah_mod`` to a tag.  Two of its conventions
+determine what a generated shard contains:
 
 * :attr:`Omega_cb` --- which sets :math:`\bar\rho_{cb}`, and so
   :math:`\sigma(M)` --- subtracts the matter-like part of the Fermi-Dirac
@@ -105,14 +103,14 @@ shard *means*:
   :math:`4.6\times10^{-3}` below it.
 * ``nu_hierarchy`` fixes how :math:`\Sigma m_\nu` divides over three
   eigenstates.  :func:`~emu_hmf.target.to_ggah_cosmology` pins it to
-  ``"degenerate"``, three equal masses, which is what the shipped weights were
-  fitted under and the only behaviour that existed when they were.
+  ``"degenerate"``, three equal masses, the convention the shipped weights were
+  fitted under.
 
-Neither is a version number this package can check, because both landed after
-``ggah_mod`` last tagged.  So the conversions probe the class for them and refuse
-a release too old to carry either, and a generation environment floating on a
-branch instead of a tag is how the shipped weights came to be fitted against a
-convention that has since moved.
+Both landed after ``ggah_mod`` last tagged, so no version comparison
+distinguishes a tree that carries them.  The conversions probe the class instead
+and refuse a release too old for either.
+:data:`emu_hmf.target.GGAH_MIN_VERSION` names the release for the error
+message.
 
 Cost, measured on the shipped campaign: about 8000 s per 250 cosmologies, so
 roughly 18 CPU-hours per mass definition and 35–40 for both.  Eight shards run
@@ -122,9 +120,9 @@ already on disk, so a kill costs minutes rather than hours.
 Why CLASS and not a spectrum emulator
 --------------------------------------
 
-The variance has to be available everywhere the CSST box goes.  A network
-spectrum trained on :math:`\omega_b \in [0.017, 0.028]` covers only about 70 per
-cent of a box that reaches :math:`\omega_b` from 0.0145 to 0.0382 --- and the
-missing 30 per cent is not a corner but a slab.  CLASS has no box.  Generation
-is offline and one-off, so paying a few seconds a cosmology to remove an
-avoidable approximation from the training data is the easy side of that trade.
+The variance must be available everywhere the CSST box reaches.  ``emu_pk`` is
+trained on :math:`\omega_b \in [0.017, 0.028]` and this box spans 0.0147 to
+0.0382, so 30 per cent of the design falls outside it, above and below.  CLASS
+carries no such bound.  Generation is offline and costs about 32 s a cosmology,
+which buys the training set an exact spectrum.  ``tests/test_box.py`` measures the
+coverage.

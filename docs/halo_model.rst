@@ -1,9 +1,9 @@
 Use with a halo-model code
 ==========================
 
-``emu_hmf`` deliberately stops at :math:`f(\sigma)`.  It has no power spectrum,
-no cosmology class and no halo model --- it takes a :math:`\sigma(M)` and
-returns a multiplicity function.  Anything larger is the caller's.
+``emu_hmf`` stops at :math:`f(\sigma)`.  It takes a :math:`\sigma(M)` and
+returns a multiplicity function, and carries no power spectrum, cosmology class
+or halo model.
 
 What the caller has to supply
 -----------------------------
@@ -27,40 +27,46 @@ What the caller has to supply
      - the eight CSST parameters, ``Omega_cb`` cold, amplitude as
        :math:`10^9 A_s`
 
-A mismatch in any of them is silent: every number stays plausible and the
-abundance is wrong by more than the correction being applied.
+A mismatch in any of them leaves every number plausible and the abundance
+wrong by more than the correction being applied.
 
 Reference: ``ggah_mod``
 -----------------------
 
-The halo-model code this package was built for is ``ggah_mod``, and it wires
-the two corrections in as ordinary named multiplicity functions:
+``ggah_mod`` is the halo-model code this package was built for.  It registers
+the two corrections as named multiplicity functions:
 
 .. code-block:: python
 
    make_field(..., hmf_model="tinker08_csst")        # the 200m weights
    make_field(..., hmf_model="tinker08_csst_vir")    # the virial weights
 
-Three things it does that any integration should do:
+Four things it does that any integration should do.
 
-**It passes the cosmology through.**  These two entries are registered as
-cosmology-dependent, so the caller does not have to remember to hand over
-``theta``; everything else in that registry is a function of
-:math:`(\sigma, z)` alone.
+It passes the cosmology through.  These two entries are registered as
+cosmology-dependent, so the caller does not hand over ``theta`` explicitly;
+every other entry in that registry is a function of :math:`(\sigma, z)` alone.
 
-**It converts the cosmology in exactly one place.**
+It converts the cosmology in one place.
 :func:`emu_hmf.target.theta_from_cosmology` is the only translation from that
-package's ``Cosmology`` into the eight, and it is written to survive tracing ---
-no ``float()`` anywhere in it --- because it is called from inside a
-differentiable path.  Its inverse, :func:`~emu_hmf.target.to_ggah_cosmology`,
-lives beside it and the round trip is pinned in both directions by
-``tests/test_target.py``.
+package's ``Cosmology`` into the eight parameters.  It calls no ``float()``,
+because it runs inside a differentiable path.  Its inverse,
+:func:`~emu_hmf.target.to_ggah_cosmology`, lives beside it, and
+``tests/test_target.py`` pins the round trip in both directions.
 
-**It refuses to mix definitions.**  Each registry entry declares the halo
-definition it is calibrated for, and a guard raises if the mass definition being
-used does not match --- so ``tinker08_csst`` at ``mdef="vir"`` is a hard error
-rather than a result that is wrong by ten per cent and looks fine.  Any
-integration should carry the equivalent; see :doc:`massdefs`.
+The conversions require ``ggah_mod`` at :data:`emu_hmf.target.GGAH_MIN_VERSION`
+or above, for :attr:`Omega_nu_matter` and the ``nu_hierarchy`` field.  They
+probe the class for both rather than reading a version string.
+
+It refuses to mix definitions.  Each registry entry declares the halo
+definition it is calibrated for, and using ``tinker08_csst`` at ``mdef="vir"``
+raises rather than returning an answer wrong by ten per cent.  See
+:doc:`massdefs`.
+
+It acts on the curvature cost.  ``ggah_mod`` reads
+:data:`emu_hmf.target.OMEGA_K_COST` and its companions, and refuses a curved
+cosmology past :data:`~emu_hmf.target.OMEGA_K_CROSSOVER`, where the correction
+stops improving on the carrier it replaces.  See :doc:`validity`.
 
 Rolling your own
 ----------------
@@ -81,6 +87,5 @@ Rolling your own
            # and m inside target.M_TRUSTED
            return self.corr.dndlnM(m, sigma, dlns, rho_cold, theta, z)
 
-Keep ``check_box=True`` unless you are inside a ``jit`` that has already been
-checked once --- it is skipped under tracing anyway, so it costs nothing in the
-compiled path.
+Keep ``check_box=True``.  It is skipped under tracing, so it costs nothing in
+a compiled path.

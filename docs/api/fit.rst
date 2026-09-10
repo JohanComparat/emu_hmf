@@ -2,8 +2,8 @@ emu_hmf.fit
 ===========
 
 Fitting the four Tinker08 parameters as functions of cosmology and redshift.
-Needs ``optax``, which is the ``[train]`` extra — and nothing else, so this is
-the step an outsider can rerun from the archived shards.
+Needs ``optax``, the ``[train]`` extra, and nothing further, so this step runs
+from the archived shards alone.
 
 * :class:`~emu_hmf.fit.Shards` — one flat training set, with the record of what
   it was built from.

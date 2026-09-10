@@ -1,42 +1,34 @@
-r"""What is being fitted: the CSST mass function, in *this* variance convention.
+r"""What is being fitted: the CSST mass function, in this package's variance convention.
 
-Two halves, and keeping them apart is the point.
+**The target** is CSSTemu's emulated :math:`\dd n/\dd\ln M`, a Gaussian process
+trained on the CSST suite, so it carries the simulations' calibration rather
+than a fit to them.  It is numpy and not differentiable, and is evaluated
+offline.
 
-**The target** is CSSTemu's emulated :math:`\dd n/\dd\ln M` --- a Gaussian
-process trained on the CSST suite, so it carries the simulations' calibration
-rather than a fit to them.  It is numpy and not differentiable, which is fine:
-it is the training target, evaluated offline, exactly as CLASS is for
-:mod:`emu_pk`.
+**The variance** comes from ``ggah_mod``: the cold field against
+:math:`\bar\rho_{cb}`, which is the :math:`\sigma(M)` the recalibrated fit is
+evaluated with.  Fitting :math:`f(\sigma)` against one variance and evaluating
+it with another shifts the answer by the difference between the two
+conventions.
 
-**The variance** is not the emulator's.  :math:`\sigma(M)` comes from
-``ggah_mod`` --- the *cold* field against :math:`\bar\rho_{cb}` --- because that
-is the :math:`\sigma(M)` the recalibrated fit will be evaluated with.
-
-The shipped training set was built on **CLASS**, not on a network spectrum:
-:mod:`emu_pk` does not cover this box, and :mod:`emu_hmf.generate` says by how
-much.  :func:`sigma_chain` defaults to :mod:`emu_pk` because it is a
-convenience for callers rather than the generation path, and that difference is
-worth keeping straight --- the weights and every accuracy quoted for them are
-independent of which spectrum emulator is installed.  Fitting :math:`f(\sigma)` against one variance and
-using it with another is the mismatch that makes a multiplicity function look
-wrong when the convention around it is what moved.
+The shipped training set was built on CLASS rather than on a network spectrum,
+because :mod:`emu_pk` does not cover this box; :mod:`emu_hmf.generate` gives the
+figure.  :func:`sigma_chain` defaults to :mod:`emu_pk` as a convenience for
+callers, so the weights and the accuracies quoted for them do not depend on
+which spectrum emulator is installed.
 
 Which mass definition
 ---------------------
 
-CSSTemu offers ``RockstarM200m``, ``FoFM200c`` and ``RockstarMvir``, and
-its wrapper in ``ggah_mod`` already records that these are genuinely different
-masses rather than conventions.  The only :math:`200{\rm c}` on offer is a
-*friends-of-friends* mass, and pairing a FoF mass with a spherical-overdensity
-multiplicity function is the category error ``ggah_mod.halos.calibration``
-refuses one rung down.
+CSSTemu offers ``RockstarM200m``, ``FoFM200c`` and ``RockstarMvir``.  The only
+:math:`200{\rm c}` on offer is a friends-of-friends mass, and a FoF catalogue
+and a spherical-overdensity multiplicity function count different objects.
 
-So the default here is ``RockstarM200m``: a true SO mass, at the definition
-``tinker08`` was itself calibrated in, and :math:`200{\rm c}` is reached
-afterwards through the published :math:`\log\Delta` interpolation exactly as
-``ggah_mod`` already does it.  ``FoFM200c`` is selectable and documented as
-carrying a finder change along with the definition, because a package that
-silently picked one of the two would be making that decision for its caller.
+The default is therefore ``RockstarM200m``: a spherical-overdensity mass at the
+definition ``tinker08`` was calibrated in.  ``ggah_mod`` reaches
+:math:`200{\rm c}` afterwards through the published :math:`\log\Delta`
+interpolation.  ``FoFM200c`` is selectable, and carries a change of halo finder
+along with the definition.
 """
 
 from __future__ import annotations
@@ -59,8 +51,7 @@ __all__ = ["MASSDEFS", "DEFAULT_MASSDEF", "Z_TRAINED", "M_TRUSTED",
 #: :math:`\nu = \delta_c/\sigma` that :data:`NU_TRUSTED` is stated in.
 #:
 #: The Einstein--de Sitter value, held fixed rather than made cosmology
-#: dependent, because that is the convention Tinker08 was calibrated in and
-#: this package's whole design is to leave the carrier alone.  A
+#: dependent, because that is the convention Tinker08 was calibrated in.  A
 #: cosmology-dependent :math:`\delta_c` would move the peak-height cut with
 #: the cosmology and make the training range mean a slightly different thing at
 #: every design point.
@@ -170,71 +161,48 @@ def nu_covered(z):
 #: What curvature costs, as :math:`\max|\Delta\ln f|` per unit
 #: :math:`|\Omega_k|`, one coefficient per weights file.
 #:
-#: :data:`emu_hmf.box.PARAMS` is CSSTemu's eight and has no curvature axis, so
-#: :func:`theta_from_cosmology` passes a curved cosmology through as the flat one
-#: carrying the same eight numbers.  That is not silent by accident: it cannot be
-#: trained away, because closing the gap needs *curved simulations* rather than a
-#: training run.  So what is owed is a number.
+#: :data:`emu_hmf.box.PARAMS` has no curvature axis, so
+#: :func:`theta_from_cosmology` passes a curved cosmology through as the flat
+#: one carrying the same eight numbers.  Closing that gap would need curved
+#: simulations rather than a longer fit, so this package measures the cost
+#: instead.
 #:
-#: **Measured** by restoring the :math:`\Omega_k(1+z)^2` term the emulator's own
-#: :math:`E(z)` already carries --- ``set_cosmos`` merely hard-sets it to zero ---
-#: and re-evaluating its Castro+23 baseline at fixed :math:`\sigma`.  On a
-#: 40-point design over every trained redshift and :math:`10^{12}` to
-#: :math:`10^{14}\,M_\odot/h`, linear to 3.4 per cent over a factor 25 in
-#: :math:`|\Omega_k|` and symmetric in its sign:
+#: Measured by restoring the :math:`\Omega_k(1+z)^2` term the emulator's own
+#: :math:`E(z)` carries, which ``set_cosmos`` sets to zero, and re-evaluating
+#: its Castro+23 baseline at fixed :math:`\sigma`.  On a 40-point design over
+#: every trained redshift and :math:`10^{12}` to :math:`10^{14}\,M_\odot/h`:
 #:
 #: ==========  ===========  =================  ===========
 #: weights     coefficient  residual at 0.002  crossover
 #: ==========  ===========  =================  ===========
-#: ``200m``    0.2242       0.00520            0.301
-#: ``vir``     0.8911       0.00571            0.116
+#: ``200m``    0.2242       0.00520            0.3009
+#: ``vir``     0.8911       0.00571            0.1162
 #: ==========  ===========  =================  ===========
 #:
-#: **The two files are not interchangeable**: virial is 3.97 times as sensitive,
-#: so the 200m number applied there understates the cost fourfold.
+#: Virial is 3.97 times as sensitive, so the two do not pool.
+#: :data:`OMEGA_K_CROSSOVER` is the more useful column: below it the
+#: recalibration beats the ``tinker08`` it replaces, above it the carrier wins.
+#: At the Planck and BAO bound of 0.002 the 200m residual moves from 0.00518 to
+#: 0.00520 against 0.06766 for ``tinker08``, a factor of thirteen.
 #:
-#: :data:`OMEGA_K_CROSSOVER` is the more useful column.  Below it the
-#: recalibration still beats the ``tinker08`` it replaces; above it the carrier
-#: is the better answer.  At the Planck and BAO bound of 0.002 the correction
-#: degrades from 0.00518 to 0.00520 at 200m, against 0.06766 for ``tinker08``
-#: unchanged --- so refusing a curved cosmology outright would be thirteen times
-#: worse than accepting one.
+#: **The limit, which belongs with the number.**  This measures the carrier's
+#: response.  The CSST suite contains no curved simulations, so the response of
+#: the Gaussian-process residual is unmeasured.  The assumption is that
+#: curvature reaches a multiplicity function at fixed :math:`\sigma` through the
+#: growth history in :math:`\Omega_m(z)`, and that the target's own model is
+#: parameterised in that quantity.
 #:
-#: **Where the linear law holds.**  Measured out to :math:`|\Omega_k| = 0.45` on
-#: both files, the coefficient is not constant: it *falls*, monotonically, by
-#: 23 per cent at 200m and 15 at virial across that range.  Every departure is
-#: in the same direction, so treating it as linear **overestimates** the cost
-#: beyond the range it was fitted and puts the crossover early rather than late
-#: --- 0.3009 against a measured 0.3715 at 200m, and 0.1162 against 0.1210 at
-#: virial.  Both crossings are bracketed by the sweep rather than extrapolated
-#: to.  Quoting the law linearly is therefore safe in the only direction that
-#: matters, and it is stated here so nobody has to assume it.
-#:
-#: **The limit, which belongs with the number.**  What is measured is the
-#: *carrier's* response.  What is **not** measured is the curvature response of
-#: the Gaussian-process residual, because no curved simulations exist in this
-#: suite to measure it against.  The claim that little is left is an argument
-#: rather than a measurement: it rests on the channel by which curvature reaches
-#: a multiplicity function at fixed :math:`\sigma` being the growth history
-#: through :math:`\Omega_m(z)`, and on the target's own model being parameterised
-#: in exactly that.  Do not compress this into a tolerance.
-#:
-#: The Gaussian-process ratio itself is curvature-blind, which is what makes the
-#: coefficient the *whole* response rather than part of it: perturbing the full
-#: emulated ``dn/dlnM`` instead of the carrier alone changes the answer by
-#: :math:`3\times10^{-6}` in :math:`\ln f` at :math:`|\Omega_k| = 0.3`, one part
-#: in :math:`10^4` of the signal.  The emulator's ratio is a function of the
-#: eight parameters and has no curvature input to respond with.
+#: The Gaussian-process ratio is curvature-blind: perturbing the full emulated
+#: ``dn/dlnM`` rather than the carrier alone changes the answer by
+#: :math:`3\times10^{-6}` in :math:`\ln f` at :math:`|\Omega_k| = 0.3`.
 OMEGA_K_COST = {"200m": 0.2242, "vir": 0.8911}
 
 #: The largest :math:`|\Omega_k|` :data:`OMEGA_K_COST` was measured at, per
 #: file.  Beyond it the linear law is an extrapolation --- a conservative one,
 #: since the true coefficient falls, but an extrapolation.
 #:
-#: A dict and not a scalar, for the reason :data:`OMEGA_K_COST` is one: a single
-#: pooled number would be a claim about a file it was not run on.  Both were
-#: extended to 0.3 only after the first version of this constant pooled them at
-#: the 200m figure, which was the same mistake this table exists to prevent.
+#: A dict rather than a scalar, for the reason :data:`OMEGA_K_COST` is one: a
+#: pooled number would be a claim about a file it was not measured on.
 OMEGA_K_MEASURED_TO = {"200m": 0.45, "vir": 0.45}
 
 #: Where the crossing was actually *observed*, per file, or ``None``.
@@ -247,17 +215,12 @@ OMEGA_K_MEASURED_TO = {"200m": 0.45, "vir": 0.45}
 #: two packages comparing a read value have no reason to leave slack for a
 #: rounding neither of them performs.
 #:
-#: **Both are measured now.**  ``200m`` was an extrapolation until the sweep was
-#: pushed past 0.30: the correction is still ahead at 0.35 and behind at 0.40,
-#: which brackets it at 0.3715 against the linear law's 0.3009 --- early by
-#: 19 per cent, against 4 at virial.  The law errs in the same direction at both
-#: and by more where it reaches further, which is what a falling coefficient
-#: should do and is now observed rather than argued.  At ``vir`` the correction still beats
-#: ``tinker08`` at :math:`|\Omega_k| = 0.10` and no longer does at 0.15, which
-#: brackets the crossing at 0.121 against the linear law's 0.116 --- early by
-#: 4 per cent.  At ``200m`` the correction is still ahead at 0.30, the largest
-#: point measured, so nothing was bracketed and 0.301 is an extrapolation with
-#: the true crossing nearer 0.37.
+#: The sweep brackets both crossings.  At ``200m`` the correction still beats
+#: ``tinker08`` at :math:`|\Omega_k| = 0.35` and no longer does at 0.40, placing
+#: the crossing at 0.3715 against the linear law's 0.3009.  At ``vir`` the
+#: brackets are 0.10 and 0.15, placing it at 0.1210 against 0.1162.  The law
+#: lands early on both, by 19 and 4 per cent, and by more where it reaches
+#: further, as a falling coefficient does.
 OMEGA_K_MEASURED_CROSSING = {"200m": 0.371517, "vir": 0.120979}
 
 
@@ -278,20 +241,19 @@ def crossover_is_measured(massdef: str) -> bool:
 #: measured against.  Derived from the two numbers each weights file already
 #: records, so it cannot drift from them.
 #:
-#: 0.301 at 200m is twice :mod:`emu_pk`'s own box edge and far outside any prior
-#: in use.  0.116 at virial is not, which is the whole reason these are two
-#: entries and not one.
+#: 0.3009 at 200m is twice :mod:`emu_pk`'s box edge and outside any prior in
+#: use.  0.1162 at virial is inside one, so the two are separate entries.
 OMEGA_K_CROSSOVER = {"200m": 0.3009, "vir": 0.1162}
 
 
-#: **The direction of the approximation, pinned at import.**
+#: The direction of the approximation, asserted at import.
 #:
-#: The whole defence of quoting a falling coefficient as a linear law is that it
-#: *overestimates* the cost, so a crossover computed from it lands early and the
+#: Quoting a falling coefficient as a linear law overestimates the cost, so a
+#: crossover computed from it lands early and the
 #: threshold refuses slightly too soon.  Early costs a little reach.  Late would
 #: mean recommending a correction that is already worse than the carrier it
 #: replaces, and every number involved would still look entirely reasonable ---
-#: which is why nothing downstream would catch it.
+#: so nothing downstream would catch it.
 #:
 #: So wherever a crossing has been observed, the linear crossover must sit at or
 #: below it.  This asserts the *direction* and not the values, so a regeneration

@@ -49,7 +49,7 @@ packages exchange, and three of those had stopped agreeing.
   `box.py` said this box is "narrower than `emu_pk`'s in three axes" and then
   named two. Measured by mapping the CSST design into `emu_pk`'s coordinates, it
   is narrower and wholly contained on seven of the eight shared axes, and on the
-  eighth it *escapes on both sides*: ω_b = Ω_b h² spans 0.0145–0.0382 against
+  eighth it *escapes on both sides*: ω_b = Ω_b h² spans 0.0147–0.0382 against
   0.0170–0.0280, putting 30 % of the design outside. That escape is the reason
   generation uses CLASS rather than a network spectrum, which `generate.py`
   already said and `box.py` contradicted.
@@ -83,6 +83,19 @@ packages exchange, and three of those had stopped agreeing.
   now checks its table against `target.OMEGA_K_COST` and its three companions
   field by field, checks both recalibrations are still registered and still
   cosmology-dependent, and checks the two entry points agree to 1e-12.
+* **Documentation verified against the code, exhaustively, and rewritten to the
+  house style.** The verification found claims the code does not support: the
+  README said the package refuses outside the peak-height bound, which it
+  cannot, since σ is an input; the quickstart said a too-old `ggah_mod` raises
+  at construction, when it raises from the first conversion; and `CONTRIBUTING`
+  said the suite passes against the runtime dependencies alone, when
+  `tests/test_fit.py` needs `optax`. That last one is now a skip rather than a
+  failure. Four figures were corrected against measurement: ω_b's lower bound
+  over the design (0.0147, not 0.0145), Tinker08's α at Δ = 200 (0.0107, not a
+  truncated 0.0106), the k-grid margin (28×, not "more than six"), and the
+  generation cost (32 s a cosmology, not "a few seconds"). The virial
+  correction is U-shaped in redshift, 16.4 % at z = 0 and 3.1 % near z = 0.7,
+  where the README had described it as growing.
 * The test suite no longer skips its CSST half silently. `importorskip` reached
   `CEmulator` before the shim that makes `CEmulator` importable, turning a
   broken dependency into thirteen skips and hiding two genuine failures.

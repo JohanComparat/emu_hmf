@@ -5,21 +5,17 @@ Installation
 
    pip install emu_hmf
 
-That is the whole story for using the package.  Python 3.10 or newer, numpy and
-JAX, and 94 kB of trained weights that ship inside the wheel --- 47 kB for
-each of the two mass definitions.
+Using the package needs Python 3.10 or newer, numpy and JAX, and the 94 kB of
+trained weights that ship inside the wheel, 47 kB per mass definition.
 
 Do I need an environment file?
 ------------------------------
 
-**No.**  There is no compiler, no conda channel, no Boltzmann solver and no
-Gaussian-process emulator behind an ``import emu_hmf``.  The dependency list is
-two entries long and that is deliberate: a forecast that wants to *evaluate* a
-mass function should not be made to install the machinery that fitted one.
-
-The split is asserted rather than assumed.  ``tests/test_public_api.py`` builds
-both corrections in a fresh interpreter and fails if ``CEmulator``, ``classy``,
-``optax`` or the halo-model code has appeared in ``sys.modules``.
+No.  ``import emu_hmf`` pulls in no compiler, conda channel, Boltzmann solver or
+Gaussian-process emulator.  ``tests/test_public_api.py`` builds both corrections
+in a fresh interpreter and fails if ``CEmulator``, ``classy``, ``optax``,
+``emu_pk``, ``scipy``, ``matplotlib`` or the halo-model code appears in
+``sys.modules``.
 
 Extras
 ------
@@ -38,7 +34,7 @@ Extras
      - optax
      - refitting the weights from an archived training set
    * - ``[dev]``
-     - pytest, pytest-cov, optax, build
+     - pytest, pytest-cov, optax, build (and ``tomli`` on Python 3.10)
      - running the test suite
    * - ``[docs]``
      - sphinx, sphinx-rtd-theme, myst-parser, matplotlib
@@ -46,19 +42,18 @@ Extras
 
 ``[dev]`` carries ``optax`` because ``tests/test_fit.py`` refits a small network
 end to end, so "running the test suite" is not satisfiable without it.  Note
-that ``docs/requirements.txt``, which Read the Docs installs, deliberately omits
-matplotlib: it builds the pages against the *committed* figures rather than
-regenerating them.
+``docs/requirements.txt``, which Read the Docs installs, omits matplotlib and
+builds the pages against the committed figures.
 
 .. code-block:: bash
 
    pip install "emu_hmf[train]"      # enough to reproduce the shipped weights
    pip install -e ".[dev]"           # a checkout, with the tests
 
-Regenerating the *training set* --- as opposed to refitting the network on it
---- needs CLASS and the CSST emulator, and the emulator is not distributed on
-PyPI.  Declaring it as an extra would produce one that could never resolve, so
-the recipe is a file, ``environment-gen.yml``, and a page:
+Regenerating the training set, as opposed to refitting the network on it,
+needs CLASS, the CSST emulator and the halo-model code.  Neither the emulator
+nor the halo-model code is distributed on PyPI, so an extra for them could
+never resolve, and the recipe lives in ``environment-gen.yml`` and in
 :doc:`reproducing`.
 
 From a checkout

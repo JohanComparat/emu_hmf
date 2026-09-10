@@ -8,29 +8,22 @@
 
 A differentiable, cosmology-dependent recalibration of the Tinker et al. (2008)
 halo multiplicity function, trained against the CSST emulator
-([Chen & Yu 2025](https://github.com/czymh/csstemu)) over the box that
-emulator was built on.
+([Chen & Yu 2025](https://github.com/czymh/csstemu)) over the box that emulator
+was built on.
 
-Tinker08 is a fit to simulations — and not to the simulations anyone compares
-against now. At a Planck cosmology it is offset by a few per cent at z = 0, and
-the size of that offset is itself a function of cosmology and redshift, which a
-fit whose only inputs are σ(M) and z cannot express. This package learns that
-offset.
-
-What it learns is *not* a mass function. It is a correction to Tinker08's four
-shape parameters (A, a, b, c) as a function of the eight CSST cosmological
+At a Planck cosmology Tinker08 is offset from the CSST suite by a few per cent
+at z = 0, and the offset varies with cosmology and redshift. A fit whose only
+inputs are σ(M) and z cannot express that variation. We fit a correction to
+Tinker08's four shape parameters as a function of the eight CSST cosmological
 parameters and redshift:
 
 ```
 f(σ) = A [ (σ/b)^-a + 1 ] exp(-c/σ²),   with   (A, a, b, c) → (A, a, b, c) · e^g(θ, z)
 ```
 
-Keeping Tinker08 as the carrier is the whole design. At `g = 0` the answer *is*
-Tinker08, exactly, so the baseline is a point in the same parameterisation
-rather than a different code. The peak-height dependence stays where the physics
-put it, and the network only has to express what the simulations add. And the
-result is a fit with named parameters, so you can ask what the recalibration did
-to the amplitude as against the tilt.
+At `g = 0` this returns Tinker08 exactly. Keeping Tinker08 as the carrier
+expresses the correction in its named parameters, which separates a change in
+amplitude from a change in tilt.
 
 ## Install
 
@@ -38,16 +31,14 @@ to the amplitude as against the tilt.
 pip install emu_hmf
 ```
 
-Two dependencies, numpy and JAX, and 94 kB of trained weights, 47 kB per mass definition. No Boltzmann
-solver, no Gaussian-process emulator, no training stack, no conda environment —
-a forecast that wants to *evaluate* a mass function should not have to install
-the machinery that fitted one. `tests/test_public_api.py` asserts that split
-rather than trusting it.
+The inference path needs numpy and JAX, and 94 kB of trained weights, 47 kB per
+mass definition. It needs no Boltzmann solver, no Gaussian-process emulator and
+no training stack; `tests/test_public_api.py` asserts the split.
 
 ### A dedicated environment
 
-If you want one anyway — for a reproducible box rather than because the package
-needs it — [`environment.yml`](https://github.com/JohanComparat/emu_hmf/blob/main/environment.yml) is the minimal one:
+[`environment.yml`](https://github.com/JohanComparat/emu_hmf/blob/main/environment.yml)
+builds a reproducible one:
 
 ```bash
 mamba env create -f environment.yml     # or: conda env create -f environment.yml
@@ -55,109 +46,108 @@ mamba activate emu_hmf
 pip install -e .
 ```
 
-It pins the **CPU** build of `jaxlib`: 64 MB against 199 MB for the CUDA one,
-and left unpinned the build depends on whether the machine that solved the
-environment happened to have a driver. The file says how to swap it for a GPU,
-and carries commented blocks for the `[dev]`, `[train]` and `[docs]` extras.
+It pins the CPU build of `jaxlib`, 64 MB against 199 MB for the CUDA one.
+Unpinned, the build resolves against whichever driver the solving machine has.
+The file says how to swap it for a GPU, and carries commented blocks for the
+`[dev]`, `[train]` and `[docs]` extras.
 
 ## Use
 
 ```python
 import numpy as np
-from emu_hmf.model import HmfCorrection
+from emu_hmf.model import HmfCorrection, WEIGHTS
 
 corr = HmfCorrection()                       # 200m; HmfCorrection(WEIGHTS["vir"]) for virial
 
 theta = np.array([0.049, 0.31, 67.36, 0.9649, 2.1, -1.0, 0.0, 0.06])
 #                 Ω_b    Ω_cb  H0     n_s     10⁹A_s  w    w_a  Σm_ν
 
-f = corr.fsigma(sigma=0.8, theta=theta, z=0.5)          # the multiplicity function
-n = corr.dndlnM(m, sigma, dlnsigma_dlnm, rho_cold, theta, z=0.5)   # the abundance
+f = corr.fsigma(sigma=0.8, theta=theta, z=0.5)
 ```
 
-σ(M) is passed in, not computed: this package has no power spectrum and should
-not acquire one, and the σ(M) the fit was made against is the *cold* field
-against ρ̄_cb. Fitting f(σ) against one variance and evaluating it with another
-is the mismatch that makes a multiplicity function look wrong when the
-convention around it is what moved.
+`dndlnM(m, sigma, dlnsigma_dlnm, rho_cold, theta, z)` returns the abundance from
+the same quantities.
 
-Everything is JAX, so `jax.grad`, `jax.jit` and `jax.vmap` all work through the
-cosmology. That is the reason this exists rather than a table of numbers.
+The caller supplies σ(M); this package computes no power spectrum. The variance
+the fit was made against is the cold field against ρ̄_cb, and evaluating f(σ)
+against a different variance shifts the answer by the difference between the two
+conventions.
+
+`jax.grad`, `jax.jit` and `jax.vmap` all pass through the cosmology.
 
 ## Two mass definitions, two files
 
-The correction is not the same function at two halo boundaries, so there is no
-single correction with a Δ argument. Both are fitted against a *Rockstar*
-spherical-overdensity mass, so the comparison isolates the boundary rather than
-mixing in a change of halo finder.
+We fit one correction per halo definition. Both are fitted against a Rockstar
+spherical-overdensity mass, so the comparison between them isolates the boundary
+rather than the halo finder.
 
 | weights | halo definition | Tinker08 unchanged | recalibrated | improvement |
 | --- | --- | --- | --- | --- |
-| `WEIGHTS["200m"]` | SO 200 × mean, Rockstar | 7.00 % | **0.52 %** | 13.1× |
-| `WEIGHTS["vir"]` | SO virial, Rockstar | 10.92 % | **0.54 %** | 19.1× |
+| `WEIGHTS["200m"]` | SO 200 × mean, Rockstar | 7.00 % | 0.52 % | 13.1× |
+| `WEIGHTS["vir"]` | SO virial, Rockstar | 10.92 % | 0.54 % | 19.1× |
 
-rms in ln f, on 200 cosmologies held out *entirely* from training — not held-out
-rows. Each design contributes several hundred rows and at fixed cosmology ln f
-is smooth in σ, so a random row split measures interpolation between neighbouring
-masses of a cosmology the network has already seen. This correction is only ever
-asked for a cosmology it has not seen.
+The figures are rms in ln f, measured on 200 cosmologies held out entirely from
+training. We split on cosmologies rather than rows because each design
+contributes several hundred rows and ln f is smooth in σ at fixed cosmology, so
+a row split measures interpolation in mass.
 
-Both files carry `WEIGHTS["200m"]`'s Δ = 200m Tinker08 as the carrier, so the
-virial weights absorb the *boundary change* as well as the recalibration. They
-are not a per-cent correction: at z = 0 they sit 14 % below the 200m carrier
-on average across the covered peak-height band, and between 8 % and 24 %
-depending on where in that band you look. Reading "correction" as "small" at
-`vir` is a misreading.
+Both files carry the Δ = 200m Tinker08 as the carrier, so the virial weights
+absorb the change of boundary as well as the recalibration. At z = 0 they sit
+14 % below that carrier on average across the covered peak-height band, ranging
+from 8 % to 24 % with peak height.
 
 ## Where it is defined
 
-Two bounds are checked for you, and the package refuses outside either rather
-than extrapolating. Two further axes are *not* checked, cannot be, and are
-passed through with a measured cost instead. Both halves are below.
-
-**The cosmology** must be inside CSST's box, which is copied into `box.py` and
+**The cosmology** must lie inside CSST's box, which is copied into `box.py` and
 checked against the emulator's own `param_limits` by `tests/test_box.py`:
 
 | Ω_b | Ω_cb | H₀ | n_s | 10⁹A_s | w | w_a | Σm_ν |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 0.04–0.06 | 0.24–0.40 | 60–80 | 0.92–1.00 | 1.7–2.5 | −1.3–−0.7 | −0.5–0.5 | 0–0.3 |
 
-Note Ω_cb: CSST bounds the **cold** density, with massive neutrinos excluded.
+Ω_cb is the cold density, with massive neutrinos excluded.
 
-**The peak height** must be inside ν = δ_c/σ ∈ [0.5, 3], and the mass inside
-10¹²–10¹⁴ M⊙/h. Those two cuts do not commute with redshift: growth pushes σ
+**The peak height** must lie inside ν = δ_c/σ ∈ [0.5, 3], and the mass inside
+10¹²–10¹⁴ M⊙/h. The two cuts do not commute with redshift: growth pushes σ
 down, so a fixed mass is a higher peak later, and the low-ν half of the band is
-simply absent above z ≈ 0.25. `target.nu_covered(z)` records what the training
-set actually spans — ν ≥ 1.4 by z = 3 — because a caller who checked only the
-nominal range would be extrapolating with no warning.
+absent above z ≈ 0.25. `target.nu_covered(z)` records what the training set
+spans, reaching ν ≥ 1.4 by z = 3.
 
-**Two axes have no bound here at all**, because CSST's suite is flat and its
-neutrinos are one species: curvature, and how Σm_ν divides over three
-eigenstates. They cannot be trained away — closing either needs different
-simulations, not a longer fit — so instead they are measured, and the package
-passes them through rather than refusing.
+The package refuses a cosmology outside the box.  It cannot check the peak
+height, because σ arrives as a number the caller computed, so it records the
+covered range instead.
 
-| weights | cost per unit \|Ω_k\| | correction beats Tinker08 below | at \|Ω_k\| = 0.002 |
-| --- | --- | --- | --- |
-| `200m` | 0.2242 | \|Ω_k\| = 0.301 | 0.00520 vs 0.06766 |
-| `vir` | 0.8911 | \|Ω_k\| = 0.121 | 0.00571 vs 0.10368 |
+**Curvature and the neutrino mass ordering** have no axis in this box, because
+the CSST suite is flat and carries one neutrino species. We measured what each
+costs and pass both through.
 
-At the Planck and BAO bound, refusing a curved cosmology would be thirteen times
-worse than accepting one. **The virial file is four times as sensitive**, so the
-200m number does not transfer. The neutrino ordering cannot move the correction
-at all — the matter budget is invariant under the split — and moves the target
-by at most 2.2 % of the residual.
+| weights | cost per unit \|Ω_k\| | crossover | observed crossing | at \|Ω_k\| = 0.002 |
+| --- | --- | --- | --- | --- |
+| `200m` | 0.2242 | 0.3009 | 0.3715 | 0.00520 vs 0.06766 |
+| `vir` | 0.8911 | 0.1162 | 0.1210 | 0.00571 vs 0.10368 |
 
-What is measured is the carrier's response, not the Gaussian process's; there
-are no curved simulations to measure the latter against. `target.OMEGA_K_COST`
-and its companions carry the numbers, and the [validity
-page](https://emu-hmf.readthedocs.io/en/latest/validity.html) carries the
-limits that belong with them.
+The crossover is where the induced error, added in quadrature to the held-out
+residual, reaches the Tinker08 this replaces. It is computed from the
+coefficient read as linear, which places it below the crossing the sweep
+observes. `ggah_mod` refuses past the crossover.
 
-The correction is a few per cent at z = 0 and grows with redshift, reaching
-11.6 % rms at z = 3 for `200m` and 16.3 % for `vir`. Quoting the low-redshift
-figure alone would understate it several-fold over most of the range it is
-defined on, and quoting the 200m figure at `vir` understates it by half again.
+At the Planck and BAO bound of \|Ω_k\| ≤ 0.002, refusing a curved cosmology
+costs a factor of thirteen against accepting one. The virial coefficient is
+3.97 times the 200m one, so the two do not pool. The ordering leaves the
+correction unchanged, because the matter budget is invariant under the split,
+and moves the target by at most 2.2 % of the residual.
+
+These figures measure the response of the Castro+23 carrier the emulator is
+built on. The CSST suite contains no curved simulations, so the response of the
+Gaussian-process residual is unmeasured. `target.OMEGA_K_COST` and its
+companions carry the numbers, and the [validity
+page](https://emu-hmf.readthedocs.io/en/latest/validity.html) states the limits.
+
+The two files behave differently with redshift.  The 200m correction grows
+from 2.3 % rms at z = 0 to 11.6 % at z = 3.  The virial correction is U-shaped,
+16.4 % at z = 0, falling to 3.1 % near z = 0.7 and returning to 16.3 % by
+z = 3, because it carries the change of boundary as well as the
+recalibration.
 
 ## Documentation
 
@@ -166,22 +156,21 @@ with figures, the validity domain, and how to reproduce the training set.
 
 ## Reproducing
 
-The 2000-cosmology training set (11.7 MB, both mass definitions) is archived
-with a DOI; the fit that turns it into the shipped weights needs only `optax`:
+The 2000-cosmology training set is 11.7 MB for both mass definitions. Fitting it
+into the shipped weights needs `optax`:
 
 ```bash
 pip install "emu_hmf[train]"
 python -m emu_hmf.fit --shards ./shards --out weights.npz
 ```
 
-Regenerating the shards themselves needs CLASS and the CSST emulator; see the
+Regenerating the shards needs CLASS and the CSST emulator; see the
 documentation's *Reproducing the training set* page.
 
 ## Citation
 
-If you use this package, please cite Tinker et al. (2008) for the functional
-form, Chen & Yu (2025) for the CSST emulator this is calibrated against, and
-this package for the recalibration. See `CITATION.cff`.
+Please cite Tinker et al. (2008) for the functional form, Chen & Yu (2025) for
+the CSST emulator, and this package for the recalibration. See `CITATION.cff`.
 
 ## Licence
 
