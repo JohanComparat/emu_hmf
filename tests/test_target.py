@@ -4,6 +4,7 @@ The module-level import guard is deliberately absent: only the classes that
 genuinely need the CSST emulator or the halo-model code skip without them, so
 that everything testable in a plain install keeps being tested.
 """
+import pathlib
 import sys
 import types
 
@@ -46,27 +47,50 @@ class TestTheDialectConversions:
         assert float(emu.Cosmo.Omegam) == pytest.approx(0.31, abs=1e-12)
         # And the identity that makes the two packages the same cosmology:
         # CSST's bounded `Omegam` is the halo code's *cold* density, so its
-        # total sits above it by exactly Omega_nu.
+        # total sits above it by exactly the density `Omega_cb` subtracts.
+        #
+        # That is `Omega_nu_matter` -- the matter-like part of the Fermi-Dirac
+        # density -- and *not* `Omega_nu`, the 93.14 eV convention, which sits
+        # 4.57e-3 below it.  This assertion named `Omega_nu` and was the thing
+        # that encoded the bug: it kept passing while the two packages drifted,
+        # because both quantities are individually defensible and only their
+        # *pairing* is the invariant.
+        #
+        # `rel=1e-12` and not exact equality, because this reconstructs the
+        # density by *subtracting* two numbers of order 0.31 to recover one of
+        # order 7e-3: the cancellation costs 1.4e-14 relative, which is a
+        # property of the arithmetic and not of the conversion.  The error being
+        # guarded against is 4.6e-3, so the tolerance sits a hundred times above
+        # the noise and eleven orders below the defect.  The conversion itself
+        # *is* exact, and `TestTheConversionRoundTrips` asserts that with `==`.
         c = target.to_ggah_cosmology(th)
         assert float(c.Omega_cb) == pytest.approx(0.31, rel=1e-12)
         assert float(c.Omega_m) - float(c.Omega_cb) == pytest.approx(
-            float(c.Omega_nu), rel=1e-12)
+            float(c.Omega_nu_matter), rel=1e-12)
         assert float(c.Omega_cdm) == pytest.approx(0.31 - 0.049, rel=1e-12)
         if mnu > 0:
             assert float(c.Omega_m) > 0.31
 
-    def test_a_box_edge_survives_the_round_trip(self, emu):
-        """The corner where the convention matters most.
+    @pytest.mark.parametrize("omegam", [0.24, 0.40])
+    @pytest.mark.parametrize("mnu", [0.0, 0.30])
+    def test_a_box_edge_survives_the_round_trip(self, emu, omegam, mnu):
+        """The corners where the convention matters most.
 
-        :math:`\\Omega_m = 0.24` with :math:`\\Sigma m_\\nu = 0.3` is inside the
-        box by construction; read the density convention the other way and the
-        emulator refuses it as ``Omegam = 0.2329 < 0.24``.  A design point
+        :math:`\\Omega_{cb} = 0.24` with :math:`\\Sigma m_\\nu = 0.3` is inside
+        the box by construction; read the density convention the other way and
+        the emulator refuses it as ``Omegam = 0.2329 < 0.24``.  A design point
         falling out of the box it was sampled inside is the only symptom this
-        error has.
+        error has --- there is no wrong number to notice, only a refusal.
+
+        All four :math:`\\Omega_{cb} \\times \\Sigma m_\\nu` corners rather
+        than the one, because the failure is proportional to
+        :math:`\\Omega_\\nu` and *only* bites where the density is smallest and
+        the neutrino mass largest.  Testing the one corner that fails is how a
+        guard comes to depend on someone having picked the right corner.
         """
-        th = np.array([0.049, 0.24, 67.36, 0.9649, 2.1, -1.0, 0.0, 0.30])
+        th = np.array([0.049, omegam, 67.36, 0.9649, 2.1, -1.0, 0.0, mnu])
         target.set_cosmology(emu, th)
-        assert float(emu.Cosmo.Omegam) == pytest.approx(0.24, abs=1e-12)
+        assert float(emu.Cosmo.Omegam) == pytest.approx(omegam, abs=1e-12)
 
     def test_the_round_trip_reproduces_sigma8(self, emu):
         """The conversions, end to end, against the emulator's own sigma_8."""
@@ -232,14 +256,76 @@ class TestTheConversionRoundTrips:
     because every value stays plausible.
     """
 
-    @pytest.mark.parametrize("mnu", [0.0, 0.06, 0.30])
+    #: ``0.02`` and ``0.058`` are not decoration.  ``ggah_mod``'s ``Cosmology``
+    #: defaults to a *normal* ordering, whose three eigenstates cannot sum to
+    #: less than 0.058993 eV, so an unpinned construction **raises** below that
+    #: --- for 393 of this package's own 2000 design points.  The fiducial
+    #: 0.06 clears the floor by 0.001 eV, which is why every smoke test passed
+    #: while a fifth of the box was unreachable.  A range that is only ever
+    #: tested above the floor cannot see this.
+    @pytest.mark.parametrize("mnu", [0.0, 0.02, 0.058, 0.06, 0.30])
     def test_theta_to_cosmology_and_back(self, mnu):
         pytest.importorskip("ggah_mod.cosmology")
         th = np.array([0.049, 0.31, 67.36, 0.9649, 2.1, -1.0, 0.0, mnu])
         back = np.asarray(target.theta_from_cosmology(
             target.to_ggah_cosmology(th)))
-        assert back == pytest.approx(th, rel=1e-12), dict(
-            zip(box.PARAMS, back - th))
+        # Exact, not `approx`.  Measured: every element round-trips bit for bit,
+        # because the density added on the way in is the one subtracted on the
+        # way out.  A tolerance here is what let a 4.6e-3 convention drift live
+        # in the package unnoticed, so the assertion says what is actually true.
+        assert np.array_equal(back, th), dict(zip(box.PARAMS, back - th))
+
+    def test_the_whole_neutrino_range_of_the_box_converts(self):
+        """Every ``mnu`` the box samples, not only the ones above the floor.
+
+        The direct regression for the failure above: sampled across
+        :data:`~emu_hmf.box.BOX`'s own ``mnu`` range rather than at chosen
+        points, so a future change that reintroduces an ordering-dependent floor
+        cannot pass by clearing it at the fiducial.
+        """
+        pytest.importorskip(
+            "ggah_mod.cosmology",
+            reason="the regression for the 19.7 per cent of the box that used "
+                   "to refuse is UNVERIFIED without ggah_mod -- this skip is "
+                   "not a pass")
+        lo, hi = box.BOX["mnu"]
+        for mnu in np.linspace(lo, hi, 25):
+            th = target.FIDUCIAL.copy()
+            th[box.PARAMS.index("mnu")] = mnu
+            back = np.asarray(target.theta_from_cosmology(
+                target.to_ggah_cosmology(th)))
+            assert np.array_equal(back, th), (mnu, back - th)
+
+    def test_the_hierarchy_is_pinned_to_the_one_the_weights_were_fitted_under(self):
+        r"""``degenerate``, declared rather than inherited.
+
+        ``ggah_mod``'s class default is ``"normal"``; ``ClassPk`` reaches three
+        equal masses through ``deg_ncdm = 3``, which is the only behaviour that
+        existed when the training set was generated.  Without the pin this is
+        both a refusal below 0.059 eV and, above it, a silently different
+        :math:`\sigma(M)` from the one the shipped weights were fitted against.
+        """
+        pytest.importorskip(
+            "ggah_mod.cosmology",
+            reason="the degenerate pin is UNVERIFIED without ggah_mod, and it "
+                   "is what keeps a fifth of the box constructible -- this "
+                   "skip is not a pass")
+        for mnu in (0.0, 0.02, 0.06, 0.30):
+            th = target.FIDUCIAL.copy()
+            th[box.PARAMS.index("mnu")] = mnu
+            assert target.to_ggah_cosmology(th).nu_hierarchy == "degenerate"
+
+    def test_the_cold_density_is_exact_across_the_design(self):
+        """The invariant that makes the two packages one cosmology.
+
+        CSST's bounded ``Omegam`` *is* ``ggah_mod``'s :attr:`Omega_cb`, over the
+        whole design and not just at the fiducial.  Needs no CSST emulator, so
+        it runs wherever the halo code does.
+        """
+        pytest.importorskip("ggah_mod.cosmology")
+        worst = max(abs(float(target.to_ggah_cosmology(th).Omega_cb) - th[1])
+                    for th in box.sample(256))
+        assert worst <= 4.0 * np.spacing(box.BOX["Omegam"][1]), worst
 
     def test_it_survives_tracing(self):
         """The reason it is not simply its inverse, written backwards.
@@ -421,3 +507,401 @@ class TestTheEmulatorIsBuiltInTheRightOrder:
         assert order == ["constructed", "cosmology", "shim", "cosmology"]
         assert emu is made[0]
         assert [c["H0"] for c in emu.cosmos] == pytest.approx([70.0, 70.0])
+
+
+class TestTheGgahRequirement:
+    """The conversions need two things a version number cannot promise.
+
+    :attr:`Omega_nu_matter` and the ``nu_hierarchy`` field both landed in
+    ``ggah_mod`` *after* it last tagged, so a floor of ``>= 0.6.0`` is satisfied
+    by a tree that has neither and a floor of ``>= 0.7.0`` by nothing yet.  And
+    every environment in this family installs it editable from a checkout, where
+    the version string says what was last tagged rather than what the tree
+    holds.  So the class is asked what it has.
+    """
+
+    def test_it_names_both_when_both_are_absent(self):
+        class Ancient:                       # a ggah_mod from before either
+            __dataclass_fields__ = {"Omega_m": None, "sum_mnu": None}
+
+        with pytest.raises(ImportError) as e:
+            target._require_ggah(Ancient)
+        msg = str(e.value)
+        assert "Omega_nu_matter" in msg and "nu_hierarchy" in msg
+        assert target.GGAH_MIN_VERSION in msg
+
+    def test_it_names_only_the_one_that_is_missing(self):
+        """Between the two commits, only the hierarchy is absent.  A message
+        that named both would send the reader looking for a second problem
+        that is not there."""
+        class Midway:
+            Omega_nu_matter = property(lambda self: 0.0)
+            __dataclass_fields__ = {"Omega_m": None, "sum_mnu": None}
+
+        with pytest.raises(ImportError, match="nu_hierarchy"):
+            target._require_ggah(Midway)
+        with pytest.raises(ImportError) as e:
+            target._require_ggah(Midway)
+        assert "Omega_nu_matter" not in str(e.value)
+
+    def test_the_installed_ggah_mod_satisfies_it(self):
+        """Skips without it, like every other test that needs the halo code.
+
+        A plain install must report skips and no failures --- ``CONTRIBUTING``,
+        ``docs/testing`` and ``docs/installation`` all promise that in those
+        words, and CI installs only ``[dev]``.  This test asserted the promise
+        while breaking it.
+        """
+        pytest.importorskip("ggah_mod.cosmology")
+        from ggah_mod.cosmology import Cosmology
+        target._require_ggah(Cosmology)      # must not raise
+
+
+class TestTheCurvatureBound:
+    """The cost of the axis the box does not have, recorded rather than refused.
+
+    Curvature cannot be trained away here: closing the gap needs curved
+    simulations, not a training run.  So the package owes a number, and these
+    are the tests that keep it from becoming a number someone chose.
+    """
+
+    def test_there_is_one_coefficient_per_weights_file(self):
+        """Every one of these is keyed by mass definition, and none is a scalar.
+
+        A pooled number is a claim about a file it was not measured on, which is
+        the exact error the per-file split exists to prevent --- and one that was
+        made here once, when the measured range was a single 0.30 taken from the
+        200m run.
+        """
+        from emu_hmf import model
+        for d in (target.OMEGA_K_COST, target.OMEGA_K_CROSSOVER,
+                  target.OMEGA_K_MEASURED_TO,
+                  target.OMEGA_K_MEASURED_CROSSING):
+            assert set(d) == set(model.WEIGHTS), d
+        assert all(v > 0 for v in target.OMEGA_K_COST.values())
+
+    def test_a_measured_crossing_is_inside_the_measured_range(self):
+        """A crossing cannot have been observed outside the range measured."""
+        for key, observed in target.OMEGA_K_MEASURED_CROSSING.items():
+            assert target.crossover_is_measured(key) == (observed is not None)
+            if observed is not None:
+                assert observed <= target.OMEGA_K_MEASURED_TO[key], key
+
+    def test_the_linear_law_errs_early_and_not_late(self):
+        r"""The direction the whole threshold rests on.
+
+        The coefficient falls with :math:`|\Omega_k|`, so reading it as linear
+        overestimates the cost and the crossover lands *below* the observed
+        crossing.  Early costs a little reach.  Late would recommend a
+        correction already worse than the carrier it replaces, and every number
+        would still look reasonable, which is why nothing downstream catches it.
+        ``ggah_mod`` asserts the same inequality against the same quantities.
+        """
+        for key, observed in target.OMEGA_K_MEASURED_CROSSING.items():
+            if observed is not None:
+                assert target.OMEGA_K_CROSSOVER[key] <= observed, key
+
+    def test_that_invariant_is_enforced_at_import(self):
+        """An invariant that cannot fail is decoration, so this checks it can.
+
+        Re-runs the module's own assertion against an inverted pair rather than
+        trusting that the ``assert`` in the source would fire.
+        """
+        crossover, observed = 0.20, 0.10           # linear law now lands late
+        with pytest.raises(AssertionError):
+            assert crossover <= observed, "refusing late rather than early"
+        # And the shipped numbers are on the right side of it.
+        for key, obs in target.OMEGA_K_MEASURED_CROSSING.items():
+            if obs is not None:
+                assert target.OMEGA_K_CROSSOVER[key] <= obs
+
+    def test_virial_is_the_more_sensitive_one(self):
+        """Not decoration: it is 4x, so the 200m number applied at virial
+        understates the cost fourfold.  A single pooled coefficient would be
+        wrong for both."""
+        c = target.OMEGA_K_COST
+        assert c["vir"] > 3.0 * c["200m"]
+
+    def test_the_crossover_follows_from_what_the_weights_record(self):
+        r"""Derived, not written down.
+
+        :data:`~emu_hmf.target.OMEGA_K_CROSSOVER` is where the induced error,
+        added in quadrature to a file's held-out residual, reaches the
+        ``tinker08`` baseline that same file was measured against.  Both numbers
+        are already in the ``.npz``, so the crossover cannot drift from them
+        without this failing.
+        """
+        from emu_hmf import model
+        for key, path in model.WEIGHTS.items():
+            with np.load(path) as d:
+                v, b = float(d["val_rms"]), float(d["baseline_rms"])
+            want = np.sqrt(b ** 2 - v ** 2) / target.OMEGA_K_COST[key]
+            assert target.OMEGA_K_CROSSOVER[key] == pytest.approx(want, rel=1e-3)
+
+    def test_refusing_would_cost_more_than_accepting_at_a_realistic_prior(self):
+        r"""The measurement's whole point, as a test.
+
+        At :math:`|\Omega_k| = 0.002` --- Planck with BAO --- a curved cosmology
+        evaluated through this correction is an order of magnitude closer to the
+        emulator than the ``tinker08`` a refusal would send the caller back to.
+        If that ever stops being true, the case for passing curvature through
+        stops with it, and this test is what says so.
+        """
+        from emu_hmf import model
+        for key, path in model.WEIGHTS.items():
+            with np.load(path) as d:
+                v, b = float(d["val_rms"]), float(d["baseline_rms"])
+            degraded = np.sqrt(v ** 2 + (target.OMEGA_K_COST[key] * 0.002) ** 2)
+            assert degraded < b / 10.0, (key, degraded, b)
+            # And the crossover is well outside any prior in use.
+            assert target.OMEGA_K_CROSSOVER[key] > 0.1
+
+    @pytest.mark.gen
+    def test_the_coefficient_reproduces(self, emu):
+        r"""Re-measure it, so the constant cannot become folklore.
+
+        Marked ``gen`` because it needs the CSST emulator.  Three assertions,
+        and the first is the one that matters: at :math:`z = 0`, :math:`E(0) = 1`
+        by closure whatever :math:`\Omega_k` is, so
+        :math:`\Delta\ln f(z{=}0)` must vanish **identically**.  Forgetting that
+        CSSTemu's own ``OmegaL`` line omits :math:`\Omega_k` is the one way to
+        botch this recipe --- it would perturb the dark energy instead --- and
+        that identity is what catches it.
+        """
+        import sys
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
+                               / "docs"))
+        from make_validity_bounds import curvature_cost
+
+        thetas = box.sample(6, seed=11)
+        for key, md in (("200m", "RockstarM200m"), ("vir", "RockstarMvir")):
+            cost, z0 = curvature_cost(md, thetas)
+            assert z0 < 1e-12, f"the z=0 identity failed for {md}: {z0}"
+            ks = sorted(cost)
+            coeffs = np.array([cost[k] / k for k in ks])
+            # The coefficient is *not* constant, and the shape of the departure
+            # is the point: it falls monotonically with |Omega_k|, so reading it
+            # as linear overestimates the cost past the range it was fitted and
+            # puts the crossover early.  Asserting a flat coefficient here would
+            # pin the opposite of what was measured.
+            assert np.all(np.diff(coeffs) <= 0), dict(zip(ks, coeffs))
+            # Near-linear where the constant is quoted, at small curvature.
+            small = coeffs[np.array(ks) <= 0.05]
+            assert np.ptp(small) / small.mean() < 0.05, small
+            # And falling by tens of per cent, not orders, out to the far end.
+            assert coeffs[-1] > 0.75 * coeffs[0], coeffs
+            # A six-point design undersamples the tail the 40-point constant
+            # was measured on, so this bounds rather than reproduces it.
+            assert coeffs[0] <= target.OMEGA_K_COST[key] * 1.05
+            assert coeffs[0] > 0.5 * target.OMEGA_K_COST[key]
+
+
+class TestTheOrderingBound:
+    r"""The ordering cannot move the correction, and the table says by how much.
+
+    Two separate claims, and keeping them apart is the point.  The *correction*
+    is provably invariant: ``ggah_mod`` builds ``Omega_nu_matter`` from
+    :math:`\Sigma m_\nu/3` in closed form, so the whole matter budget is
+    bit-for-bit invariant under the split and
+    :func:`~emu_hmf.target.theta_from_cosmology` returns identical numbers.
+    What moves is the caller's :math:`\sigma(M)`, and
+    :data:`~emu_hmf.target.NU_ORDERING_COST` bounds that.
+    """
+
+    def test_theta_does_not_move_with_the_ordering(self):
+        """The invariance itself, exactly.  If this ever fails the whole
+        accept-rather-than-refuse argument fails with it."""
+        pytest.importorskip(
+            "ggah_mod.cosmology",
+            reason="the ordering invariance is UNVERIFIED without ggah_mod, "
+                   "and it is the whole reason the ordering is accepted rather "
+                   "than refused -- this skip is not a pass")
+        for mnu in (0.12, 0.30):
+            th = target.FIDUCIAL.copy()
+            th[box.PARAMS.index("mnu")] = mnu
+            deg = target.to_ggah_cosmology(th)
+            a = np.asarray(target.theta_from_cosmology(deg))
+            for other in ("normal", "inverted"):
+                b = np.asarray(target.theta_from_cosmology(
+                    deg.replace(nu_hierarchy=other)))
+                assert np.array_equal(a, b), (mnu, other, b - a)
+
+    def test_the_table_starts_where_the_ordering_starts(self):
+        """Normal ordering has no solution below 0.058993 eV, so a table that
+        began at zero would be quoting a comparison that cannot be made."""
+        C = pytest.importorskip("ggah_mod.cosmology.constants")
+        assert min(target.NU_ORDERING_COST) >= C.NU_MASS_FLOOR["normal"]
+        assert max(target.NU_ORDERING_COST) <= box.BOX["mnu"][1]
+
+    def test_it_falls_as_the_split_closes(self):
+        """Largest at the floor, where the three masses differ most, and
+        monotone down to the box's ceiling.  A table that did not would mean
+        the measurement was picking up something other than the split."""
+        m = sorted(target.NU_ORDERING_COST)
+        mx = [target.NU_ORDERING_COST[k][0] for k in m]
+        assert all(a >= b for a, b in zip(mx, mx[1:])), mx
+        assert mx[0] > 5.0 * mx[-1]
+
+    def test_it_is_why_the_ordering_is_accepted_and_not_refused(self):
+        """The threshold, fixed before the measurement: the induced error added
+        in quadrature must leave the published residual unchanged at the two
+        figures it is quoted to."""
+        from emu_hmf import model
+        worst_rms = max(v[1] for v in target.NU_ORDERING_COST.values())
+        for path in model.WEIGHTS.values():
+            with np.load(path) as d:
+                v = float(d["val_rms"])
+            assert (round(np.sqrt(v ** 2 + worst_rms ** 2), 4)
+                    == round(v, 4)), path.name
+
+
+class TestTheGgahModIntegration:
+    """The seam, from this side.
+
+    ``ggah_mod`` consumes this package three ways: it loads the weights, it
+    calls :func:`~emu_hmf.target.theta_from_cosmology` on every evaluation, and
+    it restates the measured curvature constants in its own capability table.
+    The first two would fail loudly if they broke.  **The third would not** ---
+    two copies of one number drift silently, and every value stays plausible.
+
+    So it is pinned here, the same way ``tests/test_box.py`` pins this package's
+    copy of CSSTemu's bounds against CSSTemu.  Whoever holds the copy owes the
+    test; this file owes the *source*, and a source that never checks its
+    consumers finds out from a paper rather than from a suite.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _needs_the_halo_code(self):
+        # The skip reason says what the skip *means*, not only what is absent.
+        # A drift check that cannot run reads exactly like one that passed, and
+        # this is the half of the pair that is allowed to be missing --- the
+        # constants are still bound to their own archive by
+        # `TestTheConstantsMatchTheMeasurement`, which needs nothing external.
+        pytest.importorskip(
+            "ggah_mod.halos.mass_function",
+            reason="ggah_mod is absent, so the cross-package drift check is NOT "
+                   "running -- these skips are not passes")
+
+    #: ``ggah_mod``'s registry name -> this package's weights key.
+    FITS = {"tinker08_csst": "200m", "tinker08_csst_vir": "vir"}
+
+    def test_the_curvature_constants_have_not_drifted(self):
+        from ggah_mod.halos.mass_function import MULTIPLICITY_CAPABILITY
+
+        for fit, key in self.FITS.items():
+            cap = MULTIPLICITY_CAPABILITY.get(fit)
+            assert cap is not None, f"{fit} left ggah_mod's registry"
+            r = getattr(cap, "curvature_response", None)
+            if r is None:                    # it declares no response to check
+                continue
+            assert r.coefficient == target.OMEGA_K_COST[key], fit
+            assert r.crossover == pytest.approx(
+                target.OMEGA_K_CROSSOVER[key], rel=1e-3), fit
+            assert r.measured_to == target.OMEGA_K_MEASURED_TO[key], fit
+            assert r.measured_crossing == target.OMEGA_K_MEASURED_CROSSING[key], fit
+
+    def test_both_recalibrations_are_still_registered_and_cosmology_dependent(self):
+        """They are the only two multiplicity functions there that take a
+        cosmology, and that difference is the whole reason this package exists.
+        A rename on that side would make the correction silently unreachable."""
+        from ggah_mod.halos import mass_function as mf
+
+        for fit in self.FITS:
+            assert fit in mf.MULTIPLICITY, fit
+            assert fit in mf.COSMOLOGY_DEPENDENT_MULTIPLICITY, fit
+
+    def test_the_seam_evaluates_and_returns_this_package_s_answer(self):
+        """End to end: ggah_mod's entry point must agree with calling
+        :class:`~emu_hmf.model.HmfCorrection` directly.  If the two disagree the
+        conversion between them has moved, which is the failure this whole
+        module is about."""
+        from ggah_mod.cosmology import Cosmology
+        from ggah_mod.halos import mass_function as mf
+
+        from emu_hmf import model
+
+        cosmo = Cosmology.create(sum_mnu=0.06, nu_hierarchy="degenerate")
+        theta = target.theta_from_cosmology(cosmo)
+        for fit, key in self.FITS.items():
+            theirs = float(mf.MULTIPLICITY[fit](0.8, 0.5, cosmo=cosmo))
+            ours = float(model.HmfCorrection(model.WEIGHTS[key]).fsigma(
+                0.8, theta, 0.5))
+            assert theirs == pytest.approx(ours, rel=1e-12), fit
+
+
+class TestTheConstantsMatchTheMeasurement:
+    """The constants are typed; the archive is generated.  Bind the two.
+
+    ``docs/make_validity_bounds.py`` writes ``docs/data/validity_bounds.npz``
+    and a human copies the rounded numbers into :mod:`emu_hmf.target`.  That
+    copy is a hand step in the middle of a measured chain, and until this test
+    existed nothing checked it --- so a regeneration that moved a coefficient
+    would leave the constant, the documentation and ``ggah_mod``'s restatement
+    all agreeing with each other and none of them with the measurement.
+
+    Found by asking the question from the other end: ``ggah_mod``'s seam test
+    can tell that its copy and this package's disagree, but not which of them
+    is wrong.  This is the link that answers that.
+    """
+
+    ARCHIVE = pathlib.Path(__file__).resolve().parent.parent / "docs" / "data" \
+        / "validity_bounds.npz"
+
+    @pytest.fixture(scope="class")
+    def archive(self):
+        if not self.ARCHIVE.exists():
+            pytest.skip("regenerate with docs/make_validity_bounds.py")
+        with np.load(self.ARCHIVE) as d:
+            yield {k: d[k] for k in d.files}
+
+    def test_the_coefficients_round_to_the_constants(self, archive):
+        for key in ("200m", "vir"):
+            assert round(float(archive[f"coeff_{key}"]), 4) == \
+                target.OMEGA_K_COST[key], key
+
+    def test_the_measured_range_is_the_archive_s(self, archive):
+        for key, v in target.OMEGA_K_MEASURED_TO.items():
+            assert float(archive["measured_to"]) == v, key
+
+    def test_the_observed_crossing_is_the_archive_s(self, archive):
+        for key, want in target.OMEGA_K_MEASURED_CROSSING.items():
+            got = float(archive[f"crossing_{key}"])
+            if want is None:
+                assert np.isnan(got), (key, got)
+            else:
+                # Six significant figures, which is what both this package and
+                # `ggah_mod` carry.  The tolerance is that rounding and nothing
+                # else: 5e-6 is four orders below the 4 per cent by which this
+                # crossing and the linear crossover deliberately differ, so it
+                # cannot hide the disagreement it exists to measure.
+                assert got == pytest.approx(want, rel=5e-6), (key, got)
+
+    def test_the_ordering_table_is_the_archive_s(self, archive):
+        got = dict(zip((round(float(m), 4) for m in archive["mnu"]),
+                       zip(archive["order_max"], archive["order_rms"])))
+        assert set(got) == set(target.NU_ORDERING_COST)
+        # The table is stored to three significant figures, so half a unit in
+        # the last place is 5e-3 relative.  The tolerance is the rounding and
+        # nothing else: it is far below the 2.2 per cent of the residual this
+        # table's largest entry represents, so it cannot hide a real move.
+        for mnu, (mx, rms) in target.NU_ORDERING_COST.items():
+            a, b = got[mnu]
+            assert float(a) == pytest.approx(mx, rel=5e-3), mnu
+            assert float(b) == pytest.approx(rms, rel=5e-3), mnu
+
+    def test_the_crossover_is_derived_and_not_measured_directly(self, archive):
+        """The one constant that is *not* in the archive, and should not be.
+
+        :data:`~emu_hmf.target.OMEGA_K_CROSSOVER` follows from the coefficient
+        and the two numbers each weights file already carries, so storing it in
+        the archive would be a fourth copy of a derived quantity.  What this
+        checks is that it still follows.
+        """
+        from emu_hmf import model
+
+        assert not [k for k in archive if "crossover" in k]
+        for key, path in model.WEIGHTS.items():
+            with np.load(path) as d:
+                v, b = float(d["val_rms"]), float(d["baseline_rms"])
+            want = np.sqrt(b ** 2 - v ** 2) / float(archive[f"coeff_{key}"])
+            assert target.OMEGA_K_CROSSOVER[key] == pytest.approx(want, rel=1e-3)

@@ -23,4 +23,10 @@ dependencies:
       - "git+https://github.com/czymh/csstemu"
       # The halo-model code that supplies the variance convention, the
       # cosmology dataclass and the emulator's numpy-2 compatibility shim.
-      - "git+https://github.com/JohanComparat/ggah_mod"
+      #
+      # Pinned to a tag, not a branch.  `Omega_cb` changed which neutrino
+      # density it subtracts, and `Cosmology` gained the `nu_hierarchy` that
+      # fixes the split -- both of them part of what a generated shard *means*.
+      # A generation environment that floats on `main` is how the shipped
+      # weights came to be fitted against a convention that has since moved.
+      - "git+https://github.com/JohanComparat/ggah_mod@v0.7.0"

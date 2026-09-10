@@ -35,6 +35,6 @@ Only :mod:`~emu_hmf.model` and :mod:`~emu_hmf.box` are needed to *evaluate* a
 mass function, and between them they import nothing beyond numpy and JAX.  The
 other two are the offline half that built the weights.
 """
-__version__ = "1.0.0"
+__version__ = "1.2.0"
 
 __all__ = ["box", "target", "model", "__version__"]

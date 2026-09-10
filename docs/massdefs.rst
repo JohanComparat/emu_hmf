@@ -69,7 +69,8 @@ This is the misreading worth guarding against.
 Both files correct the **same carrier**: :func:`emu_hmf.model.tinker08`, which
 is Tinker08 at :math:`\Delta_{\rm m} = 200`.  So the virial weights absorb the
 change of boundary *as well as* the recalibration.  At :math:`z = 0` they sit
-some 14 per cent below the carrier, and the offset changes sign near
+14 per cent below the carrier on average across the covered band --- 8 to 24
+per cent depending on peak height --- and the offset changes sign near
 :math:`z \simeq 0.8` as :math:`\Delta_{\rm vir}(z)` falls toward the
 Einstein--de Sitter value.
 

@@ -10,8 +10,8 @@ authors:
 repository-code: "https://github.com/JohanComparat/emu_hmf"
 url: "https://emu-hmf.readthedocs.io"
 license: BSD-3-Clause
-version: 1.0.0
-date-released: "2026-08-31"
+version: 1.2.0
+date-released: "2026-09-10"
 keywords:
   - cosmology
   - halo mass function

@@ -15,6 +15,8 @@ class TestTheBoxIsTheEmulatorsOwn:
     """
 
     def test_it_matches_csstemu_exactly(self):
+        pytest.importorskip("ggah_mod.halos._cemulator_compat",
+                            reason="it is what makes CSSTemu importable")
         CE = pytest.importorskip("CEmulator.Emulator",
                                  reason="CSSTemu is a [gen] dependency")
         theirs = CE.HMF_CEmulator().param_limits
@@ -25,6 +27,8 @@ class TestTheBoxIsTheEmulatorsOwn:
                 f"{p}: ours {(lo, hi)}, CSSTemu's {tuple(theirs[p])}")
 
     def test_the_column_order_is_theirs_too(self):
+        pytest.importorskip("ggah_mod.halos._cemulator_compat",
+                            reason="it is what makes CSSTemu importable")
         CE = pytest.importorskip("CEmulator.Emulator",
                                  reason="CSSTemu is a [gen] dependency")
         assert list(box.PARAMS) == list(CE.HMF_CEmulator().param_names)
@@ -77,11 +81,58 @@ class TestTheRefusal:
             box.check({p: lo})
             box.check({p: hi})
 
-    def test_it_is_narrower_than_emu_pk_where_it_matters(self):
+    #: The two boxes are stated in different variables, so comparing them means
+    #: mapping this one into `emu_pk`'s.  One place, used by every test below.
+    @staticmethod
+    def _as_emu_pk(design):
+        Ob, Ocb, H0, ns, A, w, wa, mnu = np.asarray(design).T
+        h = H0 / 100.0
+        return {"omega_b": Ob * h ** 2, "omega_cdm": (Ocb - Ob) * h ** 2,
+                "h": h, "n_s": ns, "ln10A_s": np.log(10.0 * A),
+                "sum_mnu": mnu, "w0": w, "wa": wa}
+
+    def test_it_is_narrower_than_emu_pk_on_seven_of_the_eight_shared_axes(self):
         """The sigma(M) this recalibrates against comes from `emu_pk`, so the
         two boxes have to be compared rather than assumed compatible."""
         emu_pk_box = pytest.importorskip("emu_pk.box",
                                          reason="emu_pk is the sigma(M) source")
-        h_lo = box.BOX["H0"][0] / 100.0
-        assert emu_pk_box.BOX["h"][0] < h_lo, "emu_pk should be the wider one in h"
-        assert emu_pk_box.BOX["sum_mnu"][1] > box.BOX["mnu"][1]
+        mapped = self._as_emu_pk(box.sample(2000))
+        inside = [p for p, v in mapped.items()
+                  if v.min() >= emu_pk_box.BOX[p][0]
+                  and v.max() <= emu_pk_box.BOX[p][1]]
+        assert set(mapped) - set(inside) == {"omega_b"}, sorted(inside)
+
+    def test_the_one_axis_it_escapes_on_is_omega_b(self):
+        """And it escapes on *both* sides, which is the whole reason the
+        training set is generated with CLASS and not with a network spectrum.
+
+        `generate.py` quotes 30 per cent of the box as uncovered; that number
+        lives here so it cannot drift from the boxes it is a property of.
+        """
+        emu_pk_box = pytest.importorskip("emu_pk.box",
+                                         reason="emu_pk is the sigma(M) source")
+        ob = self._as_emu_pk(box.sample(4000))["omega_b"]
+        lo, hi = emu_pk_box.BOX["omega_b"]
+        assert ob.min() < lo and ob.max() > hi, (ob.min(), ob.max())
+        covered = ((ob >= lo) & (ob <= hi)).mean()
+        assert 0.65 < covered < 0.75, covered
+
+    def test_emu_pk_carries_axes_this_box_does_not_have_at_all(self):
+        """Not a narrowing but an absence.
+
+        `emu_pk` 2.0.0 samples curvature and a neutrino mass split; CSST's suite
+        is flat with one species, so there is nothing here to bound.  Asserted
+        because the distinction decides what this package can do about them:
+        a narrower axis could be widened by retraining, an absent one cannot.
+        """
+        emu_pk_box = pytest.importorskip("emu_pk.box",
+                                         reason="emu_pk is the sigma(M) source")
+        # The three axes arrived in emu_pk 2.0.0.  Skipping rather than passing
+        # on 1.x is the point: a version-blind assertion here would go green
+        # against a box that has none of them and report agreement with a
+        # release this statement is not about.
+        pytest.importorskip("emu_pk", minversion="2.0.0",
+                            reason="the three extra axes arrived in emu_pk 2.0")
+        extra = set(emu_pk_box.PARAMS) - set(self._as_emu_pk(box.sample(4)))
+        assert extra == {"Omega_k", "nu_r1", "nu_r2"}, extra
+        assert not extra & set(box.PARAMS)

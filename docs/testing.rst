@@ -12,7 +12,8 @@ code skip rather than fail, so a full run in a plain install reports skips and
 no failures.
 
 Coverage, with the halo-model code available: **100 %**, every module.  In the
-environment ``pip install emu_hmf`` creates it is 86 %, and the difference is
+``[dev]`` environment, where the generation stack is absent, it is 87 %, and the
+difference is
 entirely the tests that skip there --- the ones that need a Gaussian-process
 emulator or a Boltzmann solver to say anything.  Nothing is uncovered because
 nobody wrote a test for it.

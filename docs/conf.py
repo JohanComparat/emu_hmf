@@ -54,6 +54,48 @@ html_title = f"emu_hmf {release}"
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 master_doc = "index"
 
-# `-W` is on in CI, so a broken cross-reference fails the build rather than
-# becoming a dead link nobody notices.
-nitpicky = False
+# ``\dd`` is not a MathJax primitive -- it comes from LaTeX's `physics` package,
+# which is not loaded here -- so every ``\dd`` in this documentation rendered as
+# a red "Undefined control sequence" on the published site.  Twenty-six of them,
+# across six pages, including the two central equations: the ratio being fitted
+# and the abundance.
+#
+# ``sphinx -W`` cannot catch this.  MathJax runs in the reader's browser, long
+# after the build has succeeded, so the only way to see it is to look at a
+# rendered page.  Defining the macro is the fix; keeping the sources as ``\dd``
+# keeps them readable as LaTeX.
+mathjax3_config = {
+    "tex": {
+        "macros": {
+            "dd": r"\mathrm{d}",
+        },
+    },
+}
+
+# `-W` is on in CI, and `nitpicky` is what gives it something to catch.  With
+# it off, a Python cross-reference to a name that does not exist emits no
+# warning at all -- so `-W` passes and the link is simply dead.
+#
+# It was off, and the comment here claimed the opposite.  What slipped through
+# was a `:data:` reference to a constant that had been renamed, on the page
+# documenting the release that renamed it.
+nitpicky = True
+
+# Names that legitimately have no target: the standard library and third-party
+# packages this one deliberately does not depend on, plus the type names that
+# appear in signatures rather than in the API.
+nitpick_ignore_regex = [
+    (r"py:class", r"^(numpy|np|jax|jnp|optax|types)\..*"),
+    (r"py:class", r"^(array_like|ArrayLike|Array|optional|pathlib\.Path)$"),
+    # Sibling packages this one deliberately does not depend on.  The bare
+    # module name as well as dotted paths: ``:mod:`emu_pk``` has no dot and
+    # would otherwise slip past the pattern and fail the build.
+    (r"py:.*", r"^(ggah_mod|emu_pk|CEmulator|classy|optax)(\..*)?$"),
+    # `ggah_mod`'s `Cosmology` fields, written unqualified because the prose
+    # reads better that way and because this package documents the *convention*
+    # rather than the class.  They have no target here by construction: the
+    # dependency is deliberately one-way and lazy.
+    (r"py:(attr|class)",
+     r"^(Cosmology|Omega_m|Omega_b|Omega_cb|Omega_cdm|Omega_nu|Omega_nu_matter"
+     r"|Omega_k|rho_cold|f_nu|ln10A_s|sum_mnu|nu_hierarchy|n_s|w0|wa|h)$"),
+]

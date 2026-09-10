@@ -27,7 +27,8 @@ Something along these lines, adjusted to what you actually used:
 
    Halo abundances were computed with the Tinker et al. (2008) multiplicity
    function, recalibrated against the CSST emulator (Chen & Yu 2025) using
-   ``emu_hmf`` v1.0.0.  The recalibration multiplies each of the four Tinker08
+   ``emu_hmf`` (version as installed; ``emu_hmf.__version__`` reports it).  The
+   recalibration multiplies each of the four Tinker08
    shape parameters by a cosmology- and redshift-dependent factor learned over
    the CSST parameter box, and reduces the residual against the emulated mass
    function from 7.0 to 0.5 per cent rms in :math:`\ln f` on held-out

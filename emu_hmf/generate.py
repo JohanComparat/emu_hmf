@@ -39,7 +39,10 @@ import numpy as np
 
 from . import box, target
 
-__all__ = ["M_GRID", "CHUNK", "solve_one", "shard", "main"]
+#: ``K_GRID`` is exported because ``docs/api/generate.rst`` documents it and a
+#: name absent from ``__all__`` is skipped by autodoc, which made that a dead
+#: link rather than a page entry.
+__all__ = ["M_GRID", "K_GRID", "CHUNK", "solve_one", "shard", "main"]
 
 #: Where the target is smooth enough to fit; see :data:`emu_hmf.target.M_TRUSTED`.
 M_GRID = np.logspace(np.log10(target.M_TRUSTED[0]),

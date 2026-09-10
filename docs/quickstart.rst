@@ -92,6 +92,12 @@ two are separate files.
 When it refuses
 ---------------
 
+Three things raise.  A cosmology outside the box, below; a weights file whose
+``params_order`` is not the one :func:`~emu_hmf.model.normalise` builds; and a
+``ggah_mod`` too old for the conversions.  The last two raise at *construction*
+rather than at evaluation, so a forward model that builds cannot fail either
+way later.
+
 .. code-block:: python
 
    >>> theta_bad = theta.copy(); theta_bad[2] = 55.0      # H0 below the box

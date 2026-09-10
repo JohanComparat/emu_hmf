@@ -63,9 +63,23 @@ def make_shards():
 
 @pytest.fixture(scope="module")
 def emu():
-    """The CSST emulator, with the numpy-2 shim applied.  Skips without it."""
-    pytest.importorskip("CEmulator.Emulator",
-                        reason="the CSST emulator is not installed")
+    """The CSST emulator, with the numpy-2 shim applied.  Skips without it.
+
+    **The shim is imported first, and the order is the whole point.**  CSSTemu
+    does ``from scipy.integrate import quad, simps``, and ``simps`` was removed
+    in scipy 1.14 --- so on any current environment ``import CEmulator.Emulator``
+    raises ``ImportError`` and an ``importorskip`` that reaches it first skips
+    the entire CSSTemu half of this suite while reporting nothing worse than a
+    skip.  ``ggah_mod.halos._cemulator_compat`` restores the alias at *its*
+    import time, so importing it first is what makes the emulator importable at
+    all.
+
+    Reversed, this hid two genuine failures behind thirteen skips.  A guard that
+    turns a broken dependency into a silent skip is worse than no guard, because
+    a red suite and a green one then look the same.
+    """
     pytest.importorskip("ggah_mod.halos._cemulator_compat",
                         reason="the emulator's compatibility shim lives there")
+    pytest.importorskip("CEmulator.Emulator",
+                        reason="the CSST emulator is not installed")
     return target._emulator()

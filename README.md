@@ -38,7 +38,7 @@ to the amplitude as against the tilt.
 pip install emu_hmf
 ```
 
-Two dependencies, numpy and JAX, and 90 kB of trained weights. No Boltzmann
+Two dependencies, numpy and JAX, and 94 kB of trained weights, 47 kB per mass definition. No Boltzmann
 solver, no Gaussian-process emulator, no training stack, no conda environment —
 a forecast that wants to *evaluate* a mass function should not have to install
 the machinery that fitted one. `tests/test_public_api.py` asserts that split
@@ -104,12 +104,16 @@ asked for a cosmology it has not seen.
 
 Both files carry `WEIGHTS["200m"]`'s Δ = 200m Tinker08 as the carrier, so the
 virial weights absorb the *boundary change* as well as the recalibration. They
-are not a per-cent correction: at z = 0 they sit some 13 % below the 200m
-carrier. Reading "correction" as "small" at `vir` is a misreading.
+are not a per-cent correction: at z = 0 they sit 14 % below the 200m carrier
+on average across the covered peak-height band, and between 8 % and 24 %
+depending on where in that band you look. Reading "correction" as "small" at
+`vir` is a misreading.
 
 ## Where it is defined
 
-Outside either bound the package refuses rather than extrapolating.
+Two bounds are checked for you, and the package refuses outside either rather
+than extrapolating. Two further axes are *not* checked, cannot be, and are
+passed through with a measured cost instead. Both halves are below.
 
 **The cosmology** must be inside CSST's box, which is copied into `box.py` and
 checked against the emulator's own `param_limits` by `tests/test_box.py`:
@@ -127,9 +131,33 @@ simply absent above z ≈ 0.25. `target.nu_covered(z)` records what the training
 set actually spans — ν ≥ 1.4 by z = 3 — because a caller who checked only the
 nominal range would be extrapolating with no warning.
 
+**Two axes have no bound here at all**, because CSST's suite is flat and its
+neutrinos are one species: curvature, and how Σm_ν divides over three
+eigenstates. They cannot be trained away — closing either needs different
+simulations, not a longer fit — so instead they are measured, and the package
+passes them through rather than refusing.
+
+| weights | cost per unit \|Ω_k\| | correction beats Tinker08 below | at \|Ω_k\| = 0.002 |
+| --- | --- | --- | --- |
+| `200m` | 0.2242 | \|Ω_k\| = 0.301 | 0.00520 vs 0.06766 |
+| `vir` | 0.8911 | \|Ω_k\| = 0.121 | 0.00571 vs 0.10368 |
+
+At the Planck and BAO bound, refusing a curved cosmology would be thirteen times
+worse than accepting one. **The virial file is four times as sensitive**, so the
+200m number does not transfer. The neutrino ordering cannot move the correction
+at all — the matter budget is invariant under the split — and moves the target
+by at most 2.2 % of the residual.
+
+What is measured is the carrier's response, not the Gaussian process's; there
+are no curved simulations to measure the latter against. `target.OMEGA_K_COST`
+and its companions carry the numbers, and the [validity
+page](https://emu-hmf.readthedocs.io/en/latest/validity.html) carries the
+limits that belong with them.
+
 The correction is a few per cent at z = 0 and grows with redshift, reaching
-about 12 % rms by z = 3. Quoting the low-redshift figure alone would understate
-it several-fold over most of the range it is defined on.
+11.6 % rms at z = 3 for `200m` and 16.3 % for `vir`. Quoting the low-redshift
+figure alone would understate it several-fold over most of the range it is
+defined on, and quoting the 200m figure at `vir` understates it by half again.
 
 ## Documentation
 
@@ -142,7 +170,7 @@ The 2000-cosmology training set (11.7 MB, both mass definitions) is archived
 with a DOI; the fit that turns it into the shipped weights needs only `optax`:
 
 ```bash
-pip install emu_hmf[train]
+pip install "emu_hmf[train]"
 python -m emu_hmf.fit --shards ./shards --out weights.npz
 ```
 

@@ -9,9 +9,15 @@ it is the training target, evaluated offline, exactly as CLASS is for
 :mod:`emu_pk`.
 
 **The variance** is not the emulator's.  :math:`\sigma(M)` comes from
-``ggah_mod`` on ``emu_pk``'s spectrum --- the *cold* field against
-:math:`\bar\rho_{cb}` --- because that is the :math:`\sigma(M)` the recalibrated
-fit will be evaluated with.  Fitting :math:`f(\sigma)` against one variance and
+``ggah_mod`` --- the *cold* field against :math:`\bar\rho_{cb}` --- because that
+is the :math:`\sigma(M)` the recalibrated fit will be evaluated with.
+
+The shipped training set was built on **CLASS**, not on a network spectrum:
+:mod:`emu_pk` does not cover this box, and :mod:`emu_hmf.generate` says by how
+much.  :func:`sigma_chain` defaults to :mod:`emu_pk` because it is a
+convenience for callers rather than the generation path, and that difference is
+worth keeping straight --- the weights and every accuracy quoted for them are
+independent of which spectrum emulator is installed.  Fitting :math:`f(\sigma)` against one variance and
 using it with another is the mismatch that makes a multiplicity function look
 wrong when the convention around it is what moved.
 
@@ -40,7 +46,12 @@ import numpy as np
 from . import box
 
 __all__ = ["MASSDEFS", "DEFAULT_MASSDEF", "Z_TRAINED", "M_TRUSTED",
-           "NU_TRUSTED", "NU_COVERED", "nu_covered", "DELTA_C", "FIDUCIAL", "csst_dndlnM", "csst_tinker08",
+           "NU_TRUSTED", "NU_COVERED", "nu_covered", "DELTA_C", "FIDUCIAL",
+           "OMEGA_K_COST", "OMEGA_K_CROSSOVER", "OMEGA_K_MEASURED_TO",
+           "OMEGA_K_MEASURED_CROSSING", "crossover_is_measured",
+           "NU_ORDERING_COST",
+           "GGAH_MIN_VERSION",
+           "csst_dndlnM", "csst_tinker08",
            "set_cosmology", "sigma_chain", "to_ggah_cosmology",
            "theta_from_cosmology"]
 
@@ -156,6 +167,247 @@ def nu_covered(z):
     return float(lo), float(hi)
 
 
+#: What curvature costs, as :math:`\max|\Delta\ln f|` per unit
+#: :math:`|\Omega_k|`, one coefficient per weights file.
+#:
+#: :data:`emu_hmf.box.PARAMS` is CSSTemu's eight and has no curvature axis, so
+#: :func:`theta_from_cosmology` passes a curved cosmology through as the flat one
+#: carrying the same eight numbers.  That is not silent by accident: it cannot be
+#: trained away, because closing the gap needs *curved simulations* rather than a
+#: training run.  So what is owed is a number.
+#:
+#: **Measured** by restoring the :math:`\Omega_k(1+z)^2` term the emulator's own
+#: :math:`E(z)` already carries --- ``set_cosmos`` merely hard-sets it to zero ---
+#: and re-evaluating its Castro+23 baseline at fixed :math:`\sigma`.  On a
+#: 40-point design over every trained redshift and :math:`10^{12}` to
+#: :math:`10^{14}\,M_\odot/h`, linear to 3.4 per cent over a factor 25 in
+#: :math:`|\Omega_k|` and symmetric in its sign:
+#:
+#: ==========  ===========  =================  ===========
+#: weights     coefficient  residual at 0.002  crossover
+#: ==========  ===========  =================  ===========
+#: ``200m``    0.2242       0.00520            0.301
+#: ``vir``     0.8911       0.00571            0.116
+#: ==========  ===========  =================  ===========
+#:
+#: **The two files are not interchangeable**: virial is 3.97 times as sensitive,
+#: so the 200m number applied there understates the cost fourfold.
+#:
+#: :data:`OMEGA_K_CROSSOVER` is the more useful column.  Below it the
+#: recalibration still beats the ``tinker08`` it replaces; above it the carrier
+#: is the better answer.  At the Planck and BAO bound of 0.002 the correction
+#: degrades from 0.00518 to 0.00520 at 200m, against 0.06766 for ``tinker08``
+#: unchanged --- so refusing a curved cosmology outright would be thirteen times
+#: worse than accepting one.
+#:
+#: **Where the linear law holds.**  Measured out to :math:`|\Omega_k| = 0.45` on
+#: both files, the coefficient is not constant: it *falls*, monotonically, by
+#: 23 per cent at 200m and 15 at virial across that range.  Every departure is
+#: in the same direction, so treating it as linear **overestimates** the cost
+#: beyond the range it was fitted and puts the crossover early rather than late
+#: --- 0.3009 against a measured 0.3715 at 200m, and 0.1162 against 0.1210 at
+#: virial.  Both crossings are bracketed by the sweep rather than extrapolated
+#: to.  Quoting the law linearly is therefore safe in the only direction that
+#: matters, and it is stated here so nobody has to assume it.
+#:
+#: **The limit, which belongs with the number.**  What is measured is the
+#: *carrier's* response.  What is **not** measured is the curvature response of
+#: the Gaussian-process residual, because no curved simulations exist in this
+#: suite to measure it against.  The claim that little is left is an argument
+#: rather than a measurement: it rests on the channel by which curvature reaches
+#: a multiplicity function at fixed :math:`\sigma` being the growth history
+#: through :math:`\Omega_m(z)`, and on the target's own model being parameterised
+#: in exactly that.  Do not compress this into a tolerance.
+#:
+#: The Gaussian-process ratio itself is curvature-blind, which is what makes the
+#: coefficient the *whole* response rather than part of it: perturbing the full
+#: emulated ``dn/dlnM`` instead of the carrier alone changes the answer by
+#: :math:`3\times10^{-6}` in :math:`\ln f` at :math:`|\Omega_k| = 0.3`, one part
+#: in :math:`10^4` of the signal.  The emulator's ratio is a function of the
+#: eight parameters and has no curvature input to respond with.
+OMEGA_K_COST = {"200m": 0.2242, "vir": 0.8911}
+
+#: The largest :math:`|\Omega_k|` :data:`OMEGA_K_COST` was measured at, per
+#: file.  Beyond it the linear law is an extrapolation --- a conservative one,
+#: since the true coefficient falls, but an extrapolation.
+#:
+#: A dict and not a scalar, for the reason :data:`OMEGA_K_COST` is one: a single
+#: pooled number would be a claim about a file it was not run on.  Both were
+#: extended to 0.3 only after the first version of this constant pooled them at
+#: the 200m figure, which was the same mistake this table exists to prevent.
+OMEGA_K_MEASURED_TO = {"200m": 0.45, "vir": 0.45}
+
+#: Where the crossing was actually *observed*, per file, or ``None``.
+#:
+#: A number rather than a flag, because a flag says the crossover might be off
+#: and a number says by how much.
+#:
+#: Carried at the archive's own precision rather than rounded like
+#: :data:`OMEGA_K_COST`.  Those are *quoted* figures; this one is *read*, and
+#: two packages comparing a read value have no reason to leave slack for a
+#: rounding neither of them performs.
+#:
+#: **Both are measured now.**  ``200m`` was an extrapolation until the sweep was
+#: pushed past 0.30: the correction is still ahead at 0.35 and behind at 0.40,
+#: which brackets it at 0.3715 against the linear law's 0.3009 --- early by
+#: 19 per cent, against 4 at virial.  The law errs in the same direction at both
+#: and by more where it reaches further, which is what a falling coefficient
+#: should do and is now observed rather than argued.  At ``vir`` the correction still beats
+#: ``tinker08`` at :math:`|\Omega_k| = 0.10` and no longer does at 0.15, which
+#: brackets the crossing at 0.121 against the linear law's 0.116 --- early by
+#: 4 per cent.  At ``200m`` the correction is still ahead at 0.30, the largest
+#: point measured, so nothing was bracketed and 0.301 is an extrapolation with
+#: the true crossing nearer 0.37.
+OMEGA_K_MEASURED_CROSSING = {"200m": 0.371517, "vir": 0.120979}
+
+
+def crossover_is_measured(massdef: str) -> bool:
+    """Whether :data:`OMEGA_K_CROSSOVER` was bracketed rather than extrapolated.
+
+    Derived from :data:`OMEGA_K_MEASURED_CROSSING` rather than stored, so there
+    is no second place for one fact to disagree with itself.
+    """
+    return OMEGA_K_MEASURED_CROSSING[massdef] is not None
+
+
+
+#: Where curvature makes the recalibration no better than its own carrier.
+#:
+#: :math:`|\Omega_k|` at which :data:`OMEGA_K_COST`, added in quadrature to a
+#: file's held-out residual, reaches the ``tinker08`` baseline that file was
+#: measured against.  Derived from the two numbers each weights file already
+#: records, so it cannot drift from them.
+#:
+#: 0.301 at 200m is twice :mod:`emu_pk`'s own box edge and far outside any prior
+#: in use.  0.116 at virial is not, which is the whole reason these are two
+#: entries and not one.
+OMEGA_K_CROSSOVER = {"200m": 0.3009, "vir": 0.1162}
+
+
+#: **The direction of the approximation, pinned at import.**
+#:
+#: The whole defence of quoting a falling coefficient as a linear law is that it
+#: *overestimates* the cost, so a crossover computed from it lands early and the
+#: threshold refuses slightly too soon.  Early costs a little reach.  Late would
+#: mean recommending a correction that is already worse than the carrier it
+#: replaces, and every number involved would still look entirely reasonable ---
+#: which is why nothing downstream would catch it.
+#:
+#: So wherever a crossing has been observed, the linear crossover must sit at or
+#: below it.  This asserts the *direction* and not the values, so a regeneration
+#: that moves the numbers stays legal and one that inverts the inequality does
+#: not.  ``ggah_mod`` carries the same assertion against the same quantities;
+#: this is the copy at the end that produces them.
+for _md, _observed in OMEGA_K_MEASURED_CROSSING.items():
+    if _observed is not None:
+        assert OMEGA_K_CROSSOVER[_md] <= _observed, (
+            f"the linear crossover for {_md} ({OMEGA_K_CROSSOVER[_md]}) is "
+            f"above the measured crossing ({_observed}), so the law now "
+            f"underestimates the cost and the threshold would refuse late "
+            f"rather than early.  Late is the failure that matters and it "
+            f"looks reasonable from every other angle.")
+del _md, _observed
+
+
+#: What the neutrino mass ordering costs, as ``sum_mnu -> (max, rms)``
+#: :math:`|\Delta\ln f|` against the degenerate split the weights were fitted
+#: under.
+#:
+#: **The correction itself cannot move.**  ``ggah_mod`` builds
+#: :attr:`Omega_nu_matter` from :math:`\Sigma m_\nu/3` in closed form, so the
+#: whole matter budget --- :attr:`Omega_cb`, :attr:`Omega_cdm`, :attr:`f_nu`,
+#: :attr:`rho_cold` --- is bit-for-bit invariant under the ordering.
+#: :func:`theta_from_cosmology` therefore returns *identical* numbers for a
+#: normal and a degenerate cosmology at the same sum, and :math:`g(\theta, z)`
+#: does not move at all.  What moves is the :math:`\sigma(M)` the caller passes
+#: in, and with it the target the shipped fit was made against.
+#:
+#: Measured with CLASS, which takes the three masses, over the trained redshifts
+#: and the peak heights the fit covers.  Normal ordering against degenerate;
+#: it has no solution below 0.058993 eV, which is where the table starts:
+#:
+#: ==============  ==============  ==============
+#: Sum m_nu [eV]   max shift       rms shift
+#: ==============  ==============  ==============
+#: 0.0590          1.15e-04        3.54e-05
+#: 0.0600          1.13e-04        3.48e-05
+#: 0.0700          9.79e-05        3.04e-05
+#: 0.1000          6.71e-05        2.15e-05
+#: 0.1500          3.90e-05        1.31e-05
+#: 0.2000          2.53e-05        8.47e-06
+#: 0.3000          1.23e-05        4.34e-06
+#: ==============  ==============  ==============
+#:
+#: Largest where the orderings differ most, at the floor, and falling
+#: monotonically as the split closes on degenerate.  The worst entry is 2.2 per
+#: cent of the shipped held-out residual and the worst rms is 0.7 per cent, so
+#: added in quadrature the residual is unchanged at both figures it is published
+#: to.  **That is why a caller's ordering is accepted rather than refused**: the
+#: threshold was fixed before the measurement, and this clears it by two orders
+#: of magnitude.
+#:
+#: A caller whose :math:`\sigma(M)` came from a normal-ordered Boltzmann solve
+#: is therefore *more* accurate than the training set, not less, and this table
+#: bounds the mismatch.
+NU_ORDERING_COST = {
+    0.0590: (1.15e-04, 3.54e-05), 0.0595: (1.14e-04, 3.51e-05),
+    0.0600: (1.13e-04, 3.48e-05), 0.0650: (1.05e-04, 3.25e-05),
+    0.0700: (9.79e-05, 3.04e-05), 0.0800: (8.57e-05, 2.71e-05),
+    0.1000: (6.71e-05, 2.15e-05), 0.1250: (5.05e-05, 1.68e-05),
+    0.1500: (3.90e-05, 1.31e-05), 0.2000: (2.53e-05, 8.47e-06),
+    0.2500: (1.69e-05, 5.94e-06), 0.3000: (1.23e-05, 4.34e-06),
+}
+
+
+#: The ``ggah_mod`` release this package's conversions need, for the error
+#: message.  It is not what is *checked* --- see ``_require_ggah``.
+GGAH_MIN_VERSION = "0.7.0"
+
+
+def _require_ggah(Cosmology) -> None:
+    """Refuse a ``ggah_mod`` too old for the conventions this module speaks.
+
+    **Probed, not read off a version number**, for two reasons that point the
+    same way.  Both changes this depends on --- :attr:`Omega_nu_matter` and the
+    ``nu_hierarchy`` field --- landed *after* ``ggah_mod`` tagged 0.6.0 and
+    before it tagged anything else, so a floor of ``>= 0.6.0`` is satisfied by a
+    tree that has neither and a floor of ``>= 0.7.0`` is satisfied by nothing
+    yet.  And every environment in this family installs ``ggah_mod`` editable
+    from a checkout, where the version string says what was last tagged rather
+    than what the tree contains.
+
+    So this asks the class what it has, which is the same rule
+    ``ggah_mod.halos._cemulator_compat`` follows one package over: probe the
+    failure rather than the version, and a fixed upstream stops being patched.
+    """
+    #: Each missing name explains *itself*.  A message that recited both
+    #: whenever either was absent would send the reader hunting for a second
+    #: problem that is not there --- which is the same failure as a refusal
+    #: naming only the first offender, one level down.
+    why = {
+        "Omega_nu_matter":
+            "Omega_nu_matter is the density Omega_cb subtracts, and adding any "
+            "other one puts 1e-4 of Omega_cb -- and of rho_cold, and so of "
+            "sigma(M) -- into the variance this correction is defined against",
+        "nu_hierarchy":
+            "nu_hierarchy is what pins the degenerate split the shipped weights "
+            "were fitted under, without which a fifth of the CSST box has no "
+            "solution at all",
+    }
+    missing = []
+    if not hasattr(Cosmology, "Omega_nu_matter"):
+        missing.append("Omega_nu_matter")
+    if "nu_hierarchy" not in getattr(Cosmology, "__dataclass_fields__", {}):
+        missing.append("nu_hierarchy")
+    if missing:
+        raise ImportError(
+            f"this ggah_mod is too old for emu_hmf's conversions: its "
+            f"Cosmology has no {' and no '.join(missing)}.  "
+            + "; ".join(why[m] for m in missing)
+            + f".  That cannot be worked around here.  Install ggah_mod >= "
+              f"{GGAH_MIN_VERSION}.")
+
+
 def to_ggah_cosmology(theta):
     r"""CSST's eight -> a ``ggah_mod`` ``Cosmology``.
 
@@ -172,26 +424,59 @@ def to_ggah_cosmology(theta):
     added on the way in.
 
     It is added by *asking ``ggah_mod``* rather than by dividing
-    :math:`\Sigma m_\nu` by 93.14 eV here: :attr:`Omega_nu` is a
+    :math:`\Sigma m_\nu` by a constant here: the neutrino density is a
     :math:`\Sigma m_\nu`-and-:math:`h` quantity that does not depend on
     :attr:`Omega_m`, so one throwaway construction reads it off in whatever
     convention the package actually uses, and the second construction is exact
     by that package's own definition instead of by a constant repeated in two
-    repositories.  Getting it wrong is worth half a per cent in :math:`\Omega_m`
-    at 0.06 eV and two per cent at 0.3 --- small enough to survive every smoke
-    test, and directly in the variance the correction is being fitted against.
+    repositories.
+
+    **And the property added must be the property the inverse subtracts.**  That
+    is the whole rule, and it is what broke.  This function added
+    :attr:`Omega_nu`, the 93.14 eV convention; ``ggah_mod`` then redefined
+    :attr:`Omega_cb` to subtract :attr:`Omega_nu_matter` instead --- the
+    matter-like part of the Fermi-Dirac density, which sits
+    :math:`4.57\times10^{-3}` above it --- because subtracting the convention
+    while ``hubble_e`` added the integral left the model carrying too much total
+    matter.  Naming two different neutrino densities in the two directions is
+    the failure, not the value of either: it cost
+    :math:`1.0\times10^{-4}` of :attr:`Omega_cb` at
+    :math:`\Sigma m_\nu = 0.3`, straight into :attr:`rho_cold` and so into the
+    variance the correction is fitted against, and it pushed the
+    :math:`(\Omega_{cb} = 0.24,\ \Sigma m_\nu = 0.3)` corner back out of the
+    box it was sampled inside.
+
+    ``nu_hierarchy`` is pinned to ``"degenerate"`` for a reason of the same
+    kind.  ``ggah_mod``'s own default is ``"normal"``, three unequal masses from
+    the oscillation splittings, which has **no solution below 0.058993 eV** ---
+    so an unpinned construction refuses 393 of this package's own 2000 design
+    points, a fifth of the box, while the fiducial 0.06 eV clears the floor by
+    0.001 and every smoke test passes.  ``"degenerate"`` is also what the
+    shipped weights were fitted under: it is what ``ClassPk`` reaches through
+    ``deg_ncdm = 3``, which is the only behaviour that existed when the training
+    set was generated.  Pinning it makes that a statement rather than a default
+    inherited from another package.
+
+    A caller's own ``nu_hierarchy`` is not ignored by any of this.  It shapes
+    the :math:`\sigma(M)` they pass in, which is where the ordering belongs;
+    :math:`\theta` cannot carry it and does not need to, because the matter
+    budget is invariant under the split.
     """
     from ggah_mod.cosmology import Cosmology
+
+    _require_ggah(Cosmology)
     d = dict(zip(box.PARAMS, np.asarray(theta, dtype=float)))
     kw = dict(Omega_b=d["Omegab"], h=d["H0"] / 100.0, n_s=d["ns"],
               ln10A_s=float(np.log(10.0 * d["A"])),
-              sum_mnu=d["mnu"], w0=d["w"], wa=d["wa"])
+              sum_mnu=d["mnu"], w0=d["w"], wa=d["wa"],
+              nu_hierarchy="degenerate")
     probe = Cosmology.create(Omega_m=d["Omegam"], **kw)
-    return Cosmology.create(Omega_m=d["Omegam"] + float(probe.Omega_nu), **kw)
+    return Cosmology.create(
+        Omega_m=d["Omegam"] + float(probe.Omega_nu_matter), **kw)
 
 
 def theta_from_cosmology(cosmo):
-    r"""A ``ggah_mod`` ``Cosmology`` -> CSST's eight, in :data:`box.PARAMS` order.
+    r"""A ``ggah_mod`` ``Cosmology`` -> CSST's eight, in :data:`emu_hmf.box.PARAMS` order.
 
     The inverse of :func:`to_ggah_cosmology`, and it lives here for the same
     reason that one does: this package owns the convention, and a second
@@ -208,6 +493,31 @@ def theta_from_cosmology(cosmo):
     The density is the trap, as it is going the other way: CSST's ``Omegam`` is
     the cold density, so it comes from :attr:`Omega_cb` and not from
     :attr:`Omega_m`.
+
+    **Two of the caller's parameters are dropped, and both are dropped
+    knowingly.**  :attr:`Omega_k` and ``nu_hierarchy`` have no column here,
+    because :data:`emu_hmf.box.PARAMS` is CSSTemu's box and that box is flat with one
+    neutrino species.  Neither can be added by retraining: the target is a
+    *simulation suite*, so a curvature axis would need curved simulations rather
+    than a longer fit.
+
+    The ordering costs nothing to drop, and that is provable rather than
+    hopeful: ``ggah_mod`` builds :attr:`Omega_nu_matter` from
+    :math:`\Sigma m_\nu/3` in closed form, so every density this reads is
+    bit-for-bit invariant under the split and the eight numbers returned are
+    *identical* for a normal and a degenerate cosmology.  What the ordering
+    changes is the caller's :math:`\sigma(M)`, which is an input and is theirs.
+    :data:`NU_ORDERING_COST` bounds the mismatch against the training set.
+
+    Curvature does cost something, and :data:`OMEGA_K_COST` says how much.  **No
+    warning is raised here**, deliberately: this function is documented as
+    traceable and never asks for a concrete value, so a check would have to be
+    skipped under ``jit`` exactly where a forward model lives.  The policy
+    belongs one layer up, where the cosmology is concrete and the mass
+    definition is known --- ``ggah_mod.halos.mass_function`` consumes these
+    constants and refuses past :data:`OMEGA_K_CROSSOVER`.  Exporting a measured
+    number and letting the caller act on it once beats two half-checks that
+    disagree.
     """
     import jax.numpy as jnp
 
@@ -298,7 +608,7 @@ def _emulator(theta=None):
     return emu
 
 
-#: A Planck-like point in the middle of the CSST box, in :data:`box.PARAMS`
+#: A Planck-like point in the middle of the CSST box, in :data:`emu_hmf.box.PARAMS`
 #: order.  Public because it is the cosmology every worked example, figure and
 #: quoted number in this package is evaluated at, and one definition of it is
 #: better than five.
@@ -313,6 +623,19 @@ def sigma_chain(theta, z, m, pk=None):
     differencing it -- both because that is what the recalibrated fit will be
     evaluated with, and because a finite difference of a quadrature is how
     percent-level noise gets into a mass function.
+
+    **A convenience, not the generation path.**  The default backend is
+    :mod:`emu_pk`, which is fast and differentiable but does not cover this box:
+    :math:`\omega_b = \Omega_b h^2` leaves its bounds over 30 per cent of the
+    CSST design (see :mod:`emu_hmf.box`), and it refuses there rather than
+    extrapolating.  Pass ``pk=make_pk("class")`` for a cosmology it turns down,
+    which is what :mod:`emu_hmf.generate` uses throughout.
+
+    The numbers this returns moved with :mod:`emu_pk` 2.0.0, whose weights are
+    fitted on a wider box than 1.0.0's.  Nothing shipped in this package moved
+    with them: the training set was built with CLASS, so the weights and every
+    accuracy quoted for them are independent of which spectrum emulator is
+    installed.
     """
     import jax.numpy as jnp
     from ggah_mod.halos.variance import sigma_of_mass, dln_sigma_dln_mass

@@ -337,3 +337,47 @@ class TestTheRefusal:
         bad[box.PARAMS.index("H0")] = 55.0
         v = model.HmfCorrection(check_box=False).fsigma(1.0, bad, 0.0)
         assert np.isfinite(float(v))
+
+
+class TestTheCheckpointMustMatchTheBox:
+    """``params_order`` is stamped into every weights file, and now read back.
+
+    A weights file is just arrays.  Load one whose columns mean something else
+    and the network answers: :func:`emu_hmf.model.normalise` scales by
+    :data:`emu_hmf.box.BOX` in :data:`emu_hmf.box.PARAMS` order whatever the
+    weights were fitted in, so a permuted or narrower column set is the failure
+    that trains perfectly well and predicts nonsense.
+    """
+
+    def test_both_shipped_files_match_the_box(self):
+        for key, path in model.WEIGHTS.items():
+            got = [str(s) for s in
+                   np.asarray(model.load_weights(path)["params_order"]).ravel()]
+            assert got == list(box.PARAMS) + ["z"], key
+
+    def test_a_checkpoint_fitted_on_other_columns_is_refused(self, tmp_path):
+        """Permuted, not truncated, because that is the quiet one.
+
+        A short vector is caught by a shape error the first time the network is
+        evaluated.  A *reordered* one has exactly the right shape and is only
+        ever wrong in the answer.
+        """
+        src = model.load_weights(model.WEIGHTS["200m"])
+        swapped = list(box.PARAMS)
+        swapped[0], swapped[1] = swapped[1], swapped[0]
+        doctored = tmp_path / "permuted.npz"
+        np.savez(doctored, **{k: np.asarray(v) for k, v in src.items()
+                              if k != "params_order"},
+                 params_order=np.array(swapped + ["z"], dtype="U16"))
+        with pytest.raises(ValueError, match="was fitted on"):
+            model.HmfCorrection(doctored)
+
+    def test_a_file_that_records_no_order_is_still_loadable(self, tmp_path):
+        """Legacy and hand-built files keep working; the guard is not a version
+        gate.  What it refuses is a file that *states* a different box."""
+        src = model.load_weights(model.WEIGHTS["200m"])
+        bare = tmp_path / "bare.npz"
+        np.savez(bare, **{k: np.asarray(v) for k, v in src.items()
+                          if k != "params_order"})
+        assert np.isfinite(float(model.HmfCorrection(bare).fsigma(
+            0.8, FIDUCIAL, 0.0)))

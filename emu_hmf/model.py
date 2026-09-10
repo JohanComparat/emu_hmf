@@ -37,7 +37,11 @@ import numpy as np
 
 from . import box
 
-__all__ = ["T08", "tinker08", "HmfCorrection", "load_weights",
+#: ``normalise`` is exported because ``docs/api/model.rst`` documents it, and a
+#: name absent from ``__all__`` is skipped by autodoc -- which made that entry a
+#: dead link rather than a page section.  It is also the one piece of the
+#: forward pass a caller might reasonably want on its own.
+__all__ = ["T08", "tinker08", "normalise", "HmfCorrection", "load_weights",
            "DEFAULT_WEIGHTS", "WEIGHTS"]
 
 _DATA = pathlib.Path(__file__).resolve().parent / "data"
@@ -157,6 +161,37 @@ class HmfCorrection:
                    if k[0] in "Wb" and k[1:].isdigit()}
         self._check_box = bool(check_box)
         self.meta = {k: w[k] for k in w if k not in self._p}
+        self._check_params_order()
+
+    def _check_params_order(self) -> None:
+        """Refuse a checkpoint whose inputs are not the ones :func:`normalise` builds.
+
+        ``fit`` stamps ``params_order`` into every weights file, and until now
+        nothing read it back.  A file is just arrays: load one whose columns
+        mean something else and the network answers, because
+        :func:`normalise` scales by :data:`emu_hmf.box.BOX` in
+        :data:`~emu_hmf.box.PARAMS` order regardless of what the weights were
+        fitted in.  A permuted or narrower column set is the failure mode that
+        trains perfectly well and predicts nonsense.
+
+        This buys nothing today --- the box has not changed and both shipped
+        files match.  It is what makes a *future* change to the box loud instead
+        of silent, which is the only time it can matter, and by then it is too
+        late to add.  ``emu_pk`` 2.0.0 carries the same guard for the same
+        reason, and it is what caught its own eight-against-eleven mismatch.
+        """
+        order = self.meta.get("params_order")
+        if order is None:                       # a hand-built or legacy file
+            return
+        want = list(box.PARAMS) + ["z"]
+        got = [str(s) for s in np.asarray(order).ravel().tolist()]
+        if got != want:
+            raise ValueError(
+                f"this checkpoint was fitted on {got}, but this emu_hmf "
+                f"normalises {want}.  The network would be handed columns that "
+                f"do not mean what it was trained on and would return a "
+                f"correction rather than an error.  Refit against this box, or "
+                f"install the emu_hmf whose box it was fitted in.")
 
     def _validate(self, theta):
         if not self._check_box:

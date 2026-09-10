@@ -95,6 +95,25 @@ an extra that can never resolve is worse than a documented recipe.
    python -m emu_hmf.generate --shard 0 --n-per-shard 250 --n-total 2000 \
           --out shards/hmf_000.npz --massdef RockstarM200m
 
+``ggah_mod`` is pinned to a **tag** in that file, and the pin is part of the
+recipe rather than housekeeping.  Two of its conventions decide what a generated
+shard *means*:
+
+* :attr:`Omega_cb` --- which sets :math:`\bar\rho_{cb}`, and so
+  :math:`\sigma(M)` --- subtracts the matter-like part of the Fermi-Dirac
+  neutrino density.  It used to subtract the 93.14 eV convention, which sits
+  :math:`4.6\times10^{-3}` below it.
+* ``nu_hierarchy`` fixes how :math:`\Sigma m_\nu` divides over three
+  eigenstates.  :func:`~emu_hmf.target.to_ggah_cosmology` pins it to
+  ``"degenerate"``, three equal masses, which is what the shipped weights were
+  fitted under and the only behaviour that existed when they were.
+
+Neither is a version number this package can check, because both landed after
+``ggah_mod`` last tagged.  So the conversions probe the class for them and refuse
+a release too old to carry either, and a generation environment floating on a
+branch instead of a tag is how the shipped weights came to be fitted against a
+convention that has since moved.
+
 Cost, measured on the shipped campaign: about 8000 s per 250 cosmologies, so
 roughly 18 CPU-hours per mass definition and 35–40 for both.  Eight shards run
 independently.  Shards write every ``CHUNK`` cosmologies and skip what is

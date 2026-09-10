@@ -30,7 +30,7 @@ only the released package and matplotlib.  Run it yourself:
    :align: center
 
 At :math:`z = 0` the 200m correction is a couple of per cent and the virial one
-is fourteen; by :math:`z = 1` they have converged and both are rising.  The
+averages fourteen; by :math:`z = 1` they have converged and both are rising.  The
 shaded strip is the part of the nominal :math:`\nu` band that the training set
 does not reach at that redshift --- see :doc:`validity`.
 

@@ -6,7 +6,8 @@ Installation
    pip install emu_hmf
 
 That is the whole story for using the package.  Python 3.10 or newer, numpy and
-JAX, and roughly 90 kB of trained weights that ship inside the wheel.
+JAX, and 94 kB of trained weights that ship inside the wheel --- 47 kB for
+each of the two mass definitions.
 
 Do I need an environment file?
 ------------------------------
@@ -37,11 +38,17 @@ Extras
      - optax
      - refitting the weights from an archived training set
    * - ``[dev]``
-     - pytest, pytest-cov, build
+     - pytest, pytest-cov, optax, build
      - running the test suite
    * - ``[docs]``
-     - sphinx, matplotlib
+     - sphinx, sphinx-rtd-theme, myst-parser, matplotlib
      - building these pages and regenerating their figures
+
+``[dev]`` carries ``optax`` because ``tests/test_fit.py`` refits a small network
+end to end, so "running the test suite" is not satisfiable without it.  Note
+that ``docs/requirements.txt``, which Read the Docs installs, deliberately omits
+matplotlib: it builds the pages against the *committed* figures rather than
+regenerating them.
 
 .. code-block:: bash
 
