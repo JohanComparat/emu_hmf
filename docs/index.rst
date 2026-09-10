@@ -28,41 +28,27 @@ The inference path needs numpy and JAX.  ``jax.grad``, ``jax.jit`` and
 
 .. toctree::
    :maxdepth: 2
-   :caption: Using it
+   :caption: Getting started
 
    installation
    quickstart
-   tutorial
 
 .. toctree::
    :maxdepth: 2
-   :caption: What it is
+   :caption: Tutorial
 
+   tutorial
    concepts
    massdefs
    validity
 
 .. toctree::
    :maxdepth: 2
-   :caption: Beyond the package
+   :caption: Reference
 
+   api/index
    halo_model
    reproducing
    testing
    citation
-
-.. toctree::
-   :maxdepth: 2
-   :caption: API reference
-
-   api/model
-   api/box
-   api/target
-   api/generate
-   api/fit
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Development
-
    changelog

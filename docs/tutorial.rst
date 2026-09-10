@@ -94,7 +94,11 @@ See :doc:`massdefs`.
 
 .. code-block:: python
 
-   n = corr.dndlnM(m, sigma, dlnsigma_dlnm, rho_cold, target.FIDUCIAL, z)
+   with np.load("docs/data/sigma_illustrative.npz") as d:
+       m, zs, rho_cold = d["m"], d["z"], float(d["rho_cold"])
+       sigma, dlns = d["sigma"][0], d["dlns"][0]        # the first redshift
+
+   n = corr.dndlnM(m, sigma, dlns, rho_cold, target.FIDUCIAL, zs[0])
 
 .. figure:: _static/figures/mass_function.png
    :width: 75%

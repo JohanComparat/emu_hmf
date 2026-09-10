@@ -16,6 +16,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "sphinx.ext.mathjax",
+    "sphinx_copybutton",
     "sphinx.ext.intersphinx",
     "myst_parser",
 ]
@@ -42,16 +43,13 @@ autodoc_mock_imports = []
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
 
-html_theme = "sphinx_rtd_theme"
-html_theme_options = {
-    "collapse_navigation": False,
-    "navigation_depth": 3,
-    "titles_only": False,
-}
+html_theme = "furo"
 html_static_path = ["_static"]
 html_title = f"emu_hmf {release}"
 
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
+myst_enable_extensions = ["dollarmath", "amsmath", "colon_fence", "deflist"]
+myst_heading_anchors = 3
 master_doc = "index"
 
 # ``\dd`` is not a MathJax primitive -- it comes from LaTeX's `physics` package,

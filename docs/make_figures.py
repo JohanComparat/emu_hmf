@@ -127,7 +127,7 @@ def fig_cosmology_dependence():
     ax.axhline(1.0, color="0.4", lw=0.8, ls="--")
     ax.set_xlabel(r"peak height  $\nu = \delta_c/\sigma$")
     ax.set_ylabel(r"$f_{\rm recal}\,/\,f_{\rm Tinker08}$")
-    ax.set_title("The correction moves with the cosmology ($z=0$, 200m)",
+    ax.set_title("The correction against cosmology ($z=0$, 200m)",
                  fontsize=9.5)
     ax.legend(fontsize=6.5, loc="upper left")
     _save(fig, "cosmology_dependence")
@@ -166,8 +166,7 @@ def fig_growth_with_redshift():
     axes[1].set_ylabel(r"rms of $\ln$ (ratio), per cent")
     axes[1].legend(fontsize=7.5)
     axes[1].set_title("size of the correction", fontsize=9)
-    fig.suptitle("The correction grows with redshift, which is why it is a "
-                 "function of $z$", fontsize=9.5)
+    fig.suptitle("The correction against redshift", fontsize=9.5)
     _save(fig, "growth_with_redshift")
 
 
@@ -188,7 +187,7 @@ def fig_covered_domain():
     ax.set_xlabel("$z$")
     ax.set_ylabel(r"peak height  $\nu = \delta_c/\sigma$")
     ax.set_ylim(0.3, 3.3)
-    ax.set_title(r"The nominal $\nu$ range is necessary, not sufficient",
+    ax.set_title(r"Peak heights the training set reaches, against $z$",
                  fontsize=9.5)
     ax.legend(fontsize=7.5, loc="lower right")
     _save(fig, "covered_domain")

@@ -38,6 +38,8 @@ the two corrections as named multiplicity functions:
 
 .. code-block:: python
 
+   from ggah_mod.halos.field import make_field       # in ggah_mod, not here
+
    make_field(..., hmf_model="tinker08_csst")        # the 200m weights
    make_field(..., hmf_model="tinker08_csst_vir")    # the virial weights
 

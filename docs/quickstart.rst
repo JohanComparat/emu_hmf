@@ -34,9 +34,12 @@ The abundance
 
 .. code-block:: python
 
+   m = np.logspace(12.0, 14.0, 24)                  # M_sun/h
+   sigma, dlnsigma_dlnm, rho_cold = my_variance(m, theta, z=0.5)
    n = corr.dndlnM(m, sigma, dlnsigma_dlnm, rho_cold, theta, z=0.5)
 
-which is
+``my_variance`` is the caller's; :doc:`halo_model` says what the three
+quantities must be.  The result is
 
 .. math::
 
@@ -55,6 +58,7 @@ The forward pass is JAX throughout, including the cosmology:
 .. code-block:: python
 
    import jax, jax.numpy as jnp
+   from emu_hmf import box
 
    def ln_f(theta):
        return jnp.log(corr.fsigma(0.8, theta, 0.5))
@@ -66,8 +70,9 @@ cosmologies:
 
 .. code-block:: python
 
+   chain = jnp.asarray(box.sample(64))          # or any (n, 8) of cosmologies
    f = jax.jit(lambda t: corr.fsigma(0.8, t, 0.5))
-   values = jax.vmap(f)(chain)                  # chain is (n, 8)
+   values = jax.vmap(f)(chain)
 
 Inside a ``jit`` the box check is skipped: the values are not concrete under
 tracing.  A jitted forward model is checked once, when it is built.
