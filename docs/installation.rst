@@ -8,15 +8,6 @@ Installation
 Using the package needs Python 3.10 or newer, numpy and JAX, and the 94 kB of
 trained weights that ship inside the wheel, 47 kB per mass definition.
 
-Do I need an environment file?
-------------------------------
-
-No.  ``import emu_hmf`` pulls in no compiler, conda channel, Boltzmann solver or
-Gaussian-process emulator.  ``tests/test_public_api.py`` builds both corrections
-in a fresh interpreter and fails if ``CEmulator``, ``classy``, ``optax``,
-``emu_pk``, ``scipy``, ``matplotlib`` or the halo-model code appears in
-``sys.modules``.
-
 Extras
 ------
 

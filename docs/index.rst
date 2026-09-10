@@ -1,8 +1,9 @@
 emu_hmf
 =======
 
-A differentiable, cosmology-dependent recalibration of the Tinker et al. (2008)
-halo multiplicity function, trained against the CSST emulator over the box that
+A differentiable, cosmology-dependent recalibration of the `Tinker et al. (2008)
+<https://ui.adsabs.harvard.edu/abs/2008ApJ...688..709T/abstract>`_ halo
+multiplicity function, trained against the CSST emulator over the box that
 emulator was built on.
 
 At a Planck cosmology Tinker08 is offset from the CSST suite by a few per cent
