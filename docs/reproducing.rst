@@ -94,7 +94,9 @@ an extra that can never resolve is worse than a documented recipe.
    python -m emu_hmf.generate --shard 0 --n-per-shard 250 --n-total 2000 \
           --out shards/hmf_000.npz --massdef RockstarM200m
 
-``environment-gen.yml`` pins ``ggah_mod`` to a tag.  Two of its conventions
+``environment-gen.yml`` pins ``ggah_mod`` to a tag.  (The maintainer's shared ``dev``
+environment has ``classy`` and ``CEmulator`` too, but carries ``ggah_mod`` as an
+editable checkout, not the tag: fine for a trial shard, not for the shipped ones.)  Two of its conventions
 determine what a generated shard contains:
 
 * :attr:`Omega_cb` --- which sets :math:`\bar\rho_{cb}`, and so
